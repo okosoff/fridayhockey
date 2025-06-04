@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phan's Friday Night Hockey Signup</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; background-color: #f5f5f5; }
+    h1, h2 { text-align: center; }
+    form { max-width: 400px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    label { display: block; margin-top: 1rem; }
+    input { width: 100%; padding: 0.5rem; margin-top: 0.5rem; border-radius: 4px; border: 1px solid #ccc; }
+    button { margin-top: 1.5rem; padding: 0.75rem; width: 100%; border: none; background-color: #007BFF; color: white; font-size: 1rem; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    .message { margin-top: 1rem; text-align: center; font-weight: bold; }
+    .spot-count { text-align: center; margin-bottom: 1rem; font-weight: bold; }
+    .admin-control { text-align: center; margin-bottom: 1rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Phan's Friday Night Hockey Signup</h1>
+
+  <div class="spot-count">Spots Available: <span id="spots">Loading...</span></div>
+
+  <form id="signupForm">
+    <label for="fullName">Full Name:</label>
+    <input type="text" id="fullName" required />
+
+    <label for="phone">Phone Number:</label>
+    <input type="tel" id="phone" required />
+
+    <button type="submit">Sign Up</button>
+  </form>
+
+  <div class="message" id="message"></div>
+
+  <div style="text-align:center; margin-top: 2rem;">
+    <h2>Game Details</h2>
+    <p>Every Friday @ 9:30 PM<br />Vollmer Complex</p>
+  </div>
+
+  <hr style="margin: 2rem 0" />
+
+  <div class="admin-control">
+    <label for="adminPassword">Admin Password:</label>
+    <input type="password" id="adminPassword" />
+    <button id="adminLoginBtn">Login as Admin</button>
+
+    <div id="adminPanel" class="hidden">
+      <label for="maxSpots">Set Available Spots:</label>
+      <input type="number" id="maxSpots" min="0" />
+      <button id="updateSpotsBtn">Update Spots</button>
+    </div>
+  </div>
+
+<script>
+  const webAppUrl = "https://script.google.com/macros/s/AKfycbzVKmYvuco_LdSK8YtyPC8Z-4B1t3thUaVfR6RRSnWkUUBlOfMHAjmSPdvom3yWMKnR/exec"
+
+  let maxSpots = 2;
+  let spotsAvailable = 0; // will be updated on load
+
+  const spotsSpan = document.getElementById("spots");
+  const messageDiv = document.getElementById("message");
+  const form = document.getElementById("signupForm");
+  const adminPasswordInput = document.getElementById("adminPassword");
+  const adminLoginBtn = document.getElementById("adminLoginBtn");
+  const adminPanel = document.getElementById("adminPanel");
+  const maxSpotsInput = document.getElementById("maxSpots");
+  const updateSpotsBtn = document.getElementById("updateSpotsBtn");
+
+  // Fetch current data from backend (GET)
+  async function fetchStatus() {
+    try {
+      const response = await fetch(webAppUrl, { method: "GET" });
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const data = await response.json();
+
+      maxSpots = data.maxSpots || 2;
+      const confirmedCount = data.confirmedCount || 0;
+
+      spotsAvailable = maxSpots - confirmedCount;
+      if (spotsAvailable < 0) spotsAvailable = 0;
+
+      updateSpotsDisplay();
+      maxSpotsInput.value = maxSpots;
+    } catch (err) {
+      spotsSpan.textContent = "Error loading spots";
+      console.error("Error fetching status:", err);
+    }
+  }
+
+  function updateSpotsDisplay() {
+    spotsSpan.textContent = spotsAvailable;
+  }
+
+  adminLoginBtn.addEventListener("click", () => {
+    const pw = adminPasswordInput.value;
+    if (pw === "phanadmin") { // Replace with your secure password
+      adminPanel.classList.remove("hidden");
+      adminPasswordInput.value = "";
+    } else {
+      alert("Incorrect password.");
+    }
+  });
+
+  updateSpotsBtn.addEventListener("click", async () => {
+    const newMaxSpots = parseInt(maxSpotsInput.value, 10);
+    if (isNaN(newMaxSpots) || newMaxSpots < 0) {
+      alert("Enter a valid number of spots.");
+      return;
+    }
+
+    try {
+      // POST to backend to update max spots
+      const resp = await fetch(webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "updateMaxSpots", maxSpots: newMaxSpots, adminPassword: "phanadmin" })
+      });
+      const text = await resp.text();
+      if (resp.ok) {
+        maxSpots = newMaxSpots;
+        spotsAvailable = maxSpots - (maxSpots - spotsAvailable); // refresh spotsAvailable logically or fetch fresh later
+        await fetchStatus(); // refresh count and spots display from server
+        messageDiv.textContent = "Spot limit updated.";
+        messageDiv.style.color = "blue";
+      } else {
+        throw new Error(text);
+      }
+    } catch (err) {
+      alert("Error updating spots: " + err.message);
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const fullName = document.getElementById("fullName").value.trim();
+    const phone = document.getElementById("phone").value.trim();
+
+    if (!fullName || !phone) {
+      messageDiv.textContent = "Please fill in all fields.";
+      messageDiv.style.color = "red";
+      return;
+    }
+
+    if (spotsAvailable <= 0) {
+      messageDiv.textContent = `Sorry, spots are full. You are added to the waitlist.`;
+      messageDiv.style.color = "orange";
+    }
+
+    try {
+      // Send signup POST with status decided by spotsAvailable
+      const status = spotsAvailable > 0 ? "Confirmed" : "Waitlisted";
+
+      const resp = await fetch(webAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: fullName, phone, status })
+      });
+      const text = await resp.text();
+
+      if (!resp.ok) {
+        throw new Error(text);
+      }
+
+      if (status === "Confirmed") {
+        spotsAvailable--;
+        updateSpotsDisplay();
+        messageDiv.innerHTML = `Thanks, <strong>${fullName}</strong>! You secured a spot.<br/>
+          Please e-transfer <strong>$15</strong> to <em>okosoff@outlook.com</em> to confirm.<br/>
+          After payment, please notify via email.`;
+        messageDiv.style.color = "green";
+      } else {
+        messageDiv.innerHTML = `Hi <strong>${fullName}</strong>, spots are full.<br/>
+          You are on the waitlist.`;
+        messageDiv.style.color = "orange";
+      }
+      form.reset();
+    } catch (err) {
+      messageDiv.textContent = "Error submitting signup: " + err.message;
+      messageDiv.style.color = "red";
+    }
+  });
+
+  // Initialize on page load
+  fetchStatus();
+</script>
+</body>
+</html>
