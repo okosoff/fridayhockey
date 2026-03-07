@@ -845,13 +845,13 @@
                     <strong>1:</strong> Newbie, learning to skate, never played.<br>
                     <strong>2:</strong> Beginner, better than newbie. Slow skater.<br>
                     <strong>3:</strong> Novice, not strong skater but tries.<br>
-                    <strong>4:</strong> Low Intermediate, decent skater, can handle puck at slow speed<br>
-                    <strong>5:</strong> Intermediate, good skater, good puck control, can shoot with some power<br>
-                    <strong>6:</strong> Upper Intermediate, strong skater, good hands, accurate shot. Plays proper positions, makes smart passes<br>
-                    <strong>7:</strong> Advanced, former competitive player (high school, junior B/C). Excellent skills, reads plays well<br>
-                    <strong>8:</strong> Elite Rec, former junior A, college, or minor pro. Dominates most pickup games with ease<br>
-                    <strong>9:</strong> Semi-Pro/Pro, current or recent professional player. Skill level far above typical pickup<br>
-                    <strong>10+:</strong> NHL/OHL, unstoppable<br>
+                    <strong>4:</strong> Low Intermediate, can skate but not very fast, can handle puck at slow speed.<br>
+                    <strong>5:</strong> Intermediate, good skater, good puck control, skates hard, makes good passes.<br>
+                    <strong>6:</strong> Upper Intermediate, skates hard, strong skater, good hands, accurate shot. Plays proper positions, makes smart passes.<br>
+                    <strong>7:</strong> Advanced, excellent skills, reads plays well. Fast!<br>
+                    <strong>8:</strong> Elite Rec, dominates most pickup games with ease. Very Fast!<br>
+                    <strong>9:</strong> Junior ABC. Skill level far above typical pickup. Stupid fast?!<br>
+                    <strong>10+:</strong> Connor McDavid. Lightning Fast Beetches!<br>
                 </div>
 
                 <div style="margin: 15px 0; color: #aaa; font-size: 0.9rem;">Payment Method:</div>
@@ -890,6 +890,7 @@
                 </div>
 
                 <button type="submit" id="submitBtn">Continue</button>
+                <div id="signupError" style="display:none; margin-top:12px; background:#3a1a1a; border:1px solid #ff4444; color:#ff4444; padding:12px; border-radius:5px; text-align:center;"></div>
                 
                 <button type="button" class="view-waitlist-btn" onclick="window.location.href='/waitlist'">View Current Waitlist</button>
             </form>
@@ -923,7 +924,7 @@
         <div class="modal-content">
             <h3>⚠️ Cancel Registration</h3>
             <p>Enter the phone number you used to register to confirm cancellation:</p>
-            <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" style="margin-bottom: 15px;">
+            <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
             <div class="modal-buttons">
@@ -990,7 +991,7 @@
         function normalizeCancelPhoneInput() {
             const phoneEl = document.getElementById('cancelPhoneInput');
             if (!phoneEl) return '';
-            const digits = normalizePhoneDigits(phoneEl.value);
+            const digits = normalizePhoneDigits(phoneEl.value).slice(0, 10);
             phoneEl.value = formatPhoneInputValue(digits);
             return digits;
         }
@@ -1002,14 +1003,29 @@
             if (lastNameEl) lastNameEl.value = capitalizeFullName(lastNameEl.value);
         }
 
+        function showSignupError(message) {
+            const errorEl = document.getElementById('signupError');
+            if (!errorEl) return;
+            errorEl.innerText = message || 'Unable to complete signup.';
+            errorEl.style.display = 'block';
+        }
+
+        function hideSignupError() {
+            const errorEl = document.getElementById('signupError');
+            if (!errorEl) return;
+            errorEl.innerText = '';
+            errorEl.style.display = 'none';
+        }
+
         function validateSignupNameAndPhone() {
             normalizeNameInputs();
             const phoneDigits = normalizePhoneInput();
             if (phoneDigits.length !== 10) {
-                alert('Phone number must be exactly 10 digits.');
+                showSignupError('Phone number must be exactly 10 digits.');
                 document.getElementById('phone')?.focus();
                 return false;
             }
+            hideSignupError();
             return true;
         }
 
@@ -1464,6 +1480,13 @@
             }
         }
 
+        const cancelPhoneInputEl = document.getElementById('cancelPhoneInput');
+        if (cancelPhoneInputEl) {
+            cancelPhoneInputEl.addEventListener('input', function() {
+                normalizeCancelPhoneInput();
+            });
+        }
+
         document.getElementById('cancelModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeCancelModal();
@@ -1523,48 +1546,23 @@
 
         document.getElementById('signupForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            hideSignupError();
 
             if (!validateSignupNameAndPhone()) {
                 return;
             }
 
             if (maintenanceMode) {
-                alert('Portal is currently down for maintenance. Please check back later.');
+                showSignupError('Portal is currently down for maintenance. Please check back later.');
                 return;
             }
 
-            if (playerSpotsAvailable <= 0) {
-                const formData = {
-                    firstName: document.getElementById('firstName').value,
-                    lastName: document.getElementById('lastName').value,
-                    phone: document.getElementById('phone').value,
-                    paymentMethod: document.querySelector('input[name="payment"]:checked').value,
-                    rating: document.getElementById('rating').value,
-                    isGoalie: false
-                };
+            const submitBtn = document.getElementById('submitBtn');
+            const originalBtnText = submitBtn.innerText;
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Processing...';
 
-                try {
-                    const res = await fetch(`${API_URL}/api/register-init`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
-
-                    const result = await res.json();
-
-                    if (result.success && result.inWaitlist) {
-                        document.getElementById('registrationArea').style.display = 'none';
-                        document.getElementById('waitlistMessage').style.display = 'block';
-                        document.getElementById('waitlistPosition').innerText = '#' + result.waitlistPosition;
-                        sessionStorage.removeItem('signupFormData');
-                    }
-                } catch (err) {
-                    alert("Error registering. Please try again.");
-                }
-                return;
-            }
-
-            tempRegistrationData = {
+            const formData = {
                 firstName: capitalizeFullName(document.getElementById('firstName').value),
                 lastName: capitalizeFullName(document.getElementById('lastName').value),
                 phone: formatPhoneInputValue(document.getElementById('phone').value),
@@ -1574,10 +1572,47 @@
                 signupCode: verifiedCode
             };
 
-            sessionStorage.setItem('tempRegData', JSON.stringify(tempRegistrationData));
-            saveFormData();
+            try {
+                const res = await fetch(`${API_URL}/api/register-init`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
 
-            window.location.href = '/rules';
+                const result = await res.json();
+
+                if (!res.ok) {
+                    showSignupError(result.error || 'Unable to continue signup.');
+                    return;
+                }
+
+                if (result.success && result.inWaitlist) {
+                    document.getElementById('registrationArea').style.display = 'none';
+                    document.getElementById('waitlistMessage').style.display = 'block';
+                    document.getElementById('waitlistPosition').innerText = '#' + result.waitlistPosition;
+                    sessionStorage.removeItem('signupFormData');
+                    return;
+                }
+
+                if (result.success && result.proceedToRules && result.tempData) {
+                    tempRegistrationData = {
+                        ...result.tempData,
+                        signupCode: verifiedCode
+                    };
+                    sessionStorage.setItem('tempRegData', JSON.stringify(tempRegistrationData));
+                    saveFormData();
+                    window.location.href = '/rules';
+                    return;
+                }
+
+                showSignupError(result.error || 'Unable to continue signup.');
+            } catch (err) {
+                console.error('Signup error:', err);
+                showSignupError('Error registering. Please try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalBtnText;
+            }
         });
 
         document.addEventListener('DOMContentLoaded', function() {

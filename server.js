@@ -113,6 +113,7 @@ let manualOverrideState = null;
 let signupLockStartAt = '';
 let signupLockEndAt = '';
 let rosterReleaseAt = '';
+let resetWeekAt = '';
 
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
@@ -126,6 +127,12 @@ let rosterReleaseSchedule = {
     enabled: true,
     // Default: Fri 5:00 PM ET
     at: { dow: 5, hour: 17, minute: 0 }
+};
+
+let resetWeekSchedule = {
+    enabled: true,
+    // Default: Sat 12:00 AM ET
+    at: { dow: 6, hour: 0, minute: 0 }
 };
 
 
@@ -526,32 +533,39 @@ async function addAutoPlayers() {
     return addedCount;
 }
 
-// Weekly reset - Saturday at 12am (midnight)
-function checkWeeklyReset() {
+// Weekly reset - admin-configurable schedule (ET)
+async function checkWeeklyReset() {
     const etTime = getCurrentETTime();
     const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
     const day = etTime.getDay();
     const hour = etTime.getHours();
-    
-    // Reset on Saturday at 12am (midnight)
-    if (day === 6 && hour === 0 && (lastResetWeek !== currentWeek || currentWeekData.year !== currentYear)) {
+    const minute = etTime.getMinutes();
+
+    if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
+
+    if (
+        day === resetWeekSchedule.at.dow &&
+        hour === resetWeekSchedule.at.hour &&
+        minute === resetWeekSchedule.at.minute &&
+        (lastResetWeek !== currentWeek || currentWeekData.year !== currentYear)
+    ) {
         if (rosterReleased && currentWeekData.weekNumber && 
             (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0)) {
-            saveWeekHistory(
+            await saveWeekHistory(
                 currentWeekData.year,
                 currentWeekData.weekNumber,
                 currentWeekData.whiteTeam,
                 currentWeekData.darkTeam
             );
         }
-        
+
         playerSpots = 20;
         players = []; 
         waitlist = [];
         rosterReleased = false;
         lastResetWeek = currentWeek;
         gameDate = calculateNextGameDate();
-        
+
         currentWeekData = {
             weekNumber: currentWeek,
             year: currentYear,
@@ -559,28 +573,34 @@ function checkWeeklyReset() {
             whiteTeam: [],
             darkTeam: []
         };
-        
+
         manualOverride = false;
         manualOverrideState = null;
         requirePlayerCode = true;
-        
-        // Code stays as 9855 - no auto-generation
-        
-        // Auto-add the predefined players after reset on Saturday 12am
-        setTimeout(() => {
-            addAutoPlayers().then(() => {
-                saveData();
-            });
-        }, 100);
+
+        if (pool) {
+            try {
+                await pool.query('DELETE FROM players');
+                await pool.query('DELETE FROM waitlist');
+            } catch (err) {
+                console.error('Error clearing data during scheduled reset:', err);
+            }
+        }
+
+        await addAutoPlayers();
+        await saveData();
+        return true;
     }
+
+    return false;
 }
 
 const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 30000 : 5000;
 
-setInterval(() => {
+setInterval(async () => {
     checkAutoLock();
-    checkWeeklyReset();
-    saveData();
+    await checkWeeklyReset();
+    await saveData();
 }, CHECK_INTERVAL);
 
 // --- DATABASE FUNCTIONS ---
@@ -685,6 +705,10 @@ async function loadDataFromDB() {
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
+        if (settings.resetWeekAt !== undefined) resetWeekAt = settings.resetWeekAt || '';
+        if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
+        if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
+        if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
         
         const playersRes = await pool.query('SELECT * FROM players ORDER BY registered_at');
         players = playersRes.rows.map(p => ({
@@ -766,6 +790,10 @@ async function saveData() {
         await saveSetting('signupLockStartAt', signupLockStartAt);
         await saveSetting('signupLockEndAt', signupLockEndAt);
         await saveSetting('rosterReleaseAt', rosterReleaseAt);
+        await saveSetting('resetWeekAt', resetWeekAt);
+        await saveSetting('signupLockSchedule', signupLockSchedule);
+        await saveSetting('rosterReleaseSchedule', rosterReleaseSchedule);
+        await saveSetting('resetWeekSchedule', resetWeekSchedule);
     } catch (err) {
         console.error('Error saving data:', err);
     }
@@ -793,6 +821,13 @@ function loadDataFromFile() {
             manualOverrideState = data.manualOverrideState ?? null;
             lastResetWeek = data.lastResetWeek ?? null;
             rosterReleased = data.rosterReleased ?? false;
+            signupLockStartAt = data.signupLockStartAt ?? '';
+            signupLockEndAt = data.signupLockEndAt ?? '';
+            rosterReleaseAt = data.rosterReleaseAt ?? '';
+            resetWeekAt = data.resetWeekAt ?? '';
+            signupLockSchedule = data.signupLockSchedule ?? signupLockSchedule;
+            rosterReleaseSchedule = data.rosterReleaseSchedule ?? rosterReleaseSchedule;
+            resetWeekSchedule = data.resetWeekSchedule ?? resetWeekSchedule;
             currentWeekData = data.currentWeekData ?? {
                 weekNumber: null,
                 year: null,
@@ -1783,7 +1818,8 @@ app.post('/api/admin/settings', (req, res) => {
         date: gameDate,
         rosterReleased,
         signupLockSchedule,
-        rosterReleaseSchedule
+        rosterReleaseSchedule,
+        resetWeekSchedule
     });
 });
 
@@ -1837,7 +1873,8 @@ app.post('/api/admin/update-code', (req, res) => {
 
 
 app.post('/api/admin/update-schedules', (req, res) => {
-    const { password, sessionToken, signupLockEnabled, signupLockStart, signupLockEnd, rosterReleaseEnabled, rosterReleaseAt } = req.body;
+        const body = req.body || {};
+    const { password, sessionToken, signupLockEnabled, signupLockStart, signupLockEnd, rosterReleaseEnabled, rosterReleaseAt: rosterReleaseAtInput, resetWeekEnabled, resetWeekAt: resetWeekAtInput } = body;
     if (!adminSessions[sessionToken] && password !== ADMIN_PASSWORD) {
         return res.status(401).send("Unauthorized");
     }
@@ -1855,8 +1892,20 @@ app.post('/api/admin/update-schedules', (req, res) => {
     if (typeof rosterReleaseEnabled === 'boolean') {
         rosterReleaseSchedule.enabled = rosterReleaseEnabled;
     }
-    const at = parseDatetimeLocalToDowTime(rosterReleaseAt);
+    const at = parseDatetimeLocalToDowTime(rosterReleaseAtInput);
     if (at) rosterReleaseSchedule.at = at;
+
+    // Weekly reset schedule
+    if (typeof resetWeekEnabled === 'boolean') {
+        resetWeekSchedule.enabled = resetWeekEnabled;
+    }
+    const resetAt = parseDatetimeLocalToDowTime(resetWeekAtInput);
+    if (resetAt) resetWeekSchedule.at = resetAt;
+
+    signupLockStartAt = signupLockStart || signupLockStartAt;
+    signupLockEndAt = signupLockEnd || signupLockEndAt;
+    rosterReleaseAt = rosterReleaseAtInput || rosterReleaseAt;
+    resetWeekAt = resetWeekAtInput || resetWeekAt;
 
     saveData();
     const lockStatus = checkAutoLock();
@@ -1865,6 +1914,7 @@ app.post('/api/admin/update-schedules', (req, res) => {
         success: true,
         signupLockSchedule,
         rosterReleaseSchedule,
+        resetWeekSchedule,
         requireCode: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow
     });
@@ -2445,8 +2495,9 @@ initDatabase().then(() => {
     checkAutoLock();
     checkWeeklyReset();
     
-    cron.schedule('* * * * *', () => {
-        autoReleaseRoster();
+    cron.schedule('* * * * *', async () => {
+        await autoReleaseRoster();
+        await checkWeeklyReset();
     }, {
         timezone: 'America/New_York'
     });
@@ -2466,8 +2517,9 @@ initDatabase().then(() => {
     checkAutoLock();
     checkWeeklyReset();
     
-    cron.schedule('* * * * *', () => {
-        autoReleaseRoster();
+    cron.schedule('* * * * *', async () => {
+        await autoReleaseRoster();
+        await checkWeeklyReset();
     }, {
         timezone: 'America/New_York'
     });

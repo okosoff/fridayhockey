@@ -1410,6 +1410,23 @@
 
                         <div class="schedule-hint">Also repeats weekly based on the selected weekday + time (ET).</div>
                     </div>
+
+                    <div class="schedule-card">
+                        <div class="schedule-title">♻️ Weekly Reset</div>
+                        <label class="schedule-label">
+                            <input type="checkbox" id="resetWeekEnabled">
+                            Enable scheduled weekly reset
+                        </label>
+
+                        <div class="schedule-row">
+                            <div class="schedule-field">
+                                <div class="schedule-label2">Reset at</div>
+                                <input type="datetime-local" id="resetWeekAt" class="control-input">
+                            </div>
+                        </div>
+
+                        <div class="schedule-hint">This clears players and waitlist, then auto-adds the default players. Repeats weekly in ET.</div>
+                    </div>
                 </div>
 
                 <div class="control-row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
@@ -1700,7 +1717,7 @@
         }
 
         
-        const ENHANCED_DT_IDS = ['titleDayTime', 'signupLockStart', 'signupLockEnd', 'rosterReleaseAt'];
+        const ENHANCED_DT_IDS = ['titleDayTime', 'signupLockStart', 'signupLockEnd', 'rosterReleaseAt', 'resetWeekAt'];
         let activeClockTargetId = null;
         let clockMode = 'hour';
         let clockState = { hour24: 12, minute: 0 };
@@ -1966,6 +1983,7 @@
             if (!sData) return "—";
             const lock = sData.signupLockSchedule;
             const rr = sData.rosterReleaseSchedule;
+            const reset = sData.resetWeekSchedule;
 
             const lockLine = lock?.enabled
                 ? `${dayName(lock.start.dow)} ${pad2(lock.start.hour)}:${pad2(lock.start.minute)} → ${dayName(lock.end.dow)} ${pad2(lock.end.hour)}:${pad2(lock.end.minute)}`
@@ -1975,9 +1993,14 @@
                 ? `${dayName(rr.at.dow)} ${pad2(rr.at.hour)}:${pad2(rr.at.minute)}`
                 : "OFF";
 
+            const resetLine = reset?.enabled
+                ? `${dayName(reset.at.dow)} ${pad2(reset.at.hour)}:${pad2(reset.at.minute)}`
+                : "OFF";
+
             return `
                 <strong>🔒 Signup Lock Window:</strong> ${lockLine}<br>
                 <strong>📋 Auto Roster Release:</strong> ${rrLine}<br>
+                <strong>♻️ Weekly Reset:</strong> ${resetLine}<br>
                 <span style="color:#aaa;">Times are interpreted in ET and repeat weekly.</span>
             `;
         }
@@ -1990,7 +2013,9 @@
                     signupLockStart: document.getElementById('signupLockStart').value,
                     signupLockEnd: document.getElementById('signupLockEnd').value,
                     rosterReleaseEnabled: document.getElementById('rosterReleaseEnabled').checked,
-                    rosterReleaseAt: document.getElementById('rosterReleaseAt').value
+                    rosterReleaseAt: document.getElementById('rosterReleaseAt').value,
+                    resetWeekEnabled: document.getElementById('resetWeekEnabled').checked,
+                    resetWeekAt: document.getElementById('resetWeekAt').value
                 };
 
                 const res = await fetch(`${API_URL}/api/admin/update-schedules`, {
@@ -2487,6 +2512,12 @@
                     const a = data.rosterReleaseSchedule.at;
                     if (a) document.getElementById('rosterReleaseAt').value = toDatetimeLocalValue(nextOccurrenceDate(a.dow, a.hour, a.minute));
                     syncEnhancedControl('rosterReleaseAt');
+                }
+                if (data.resetWeekSchedule) {
+                    document.getElementById('resetWeekEnabled').checked = !!data.resetWeekSchedule.enabled;
+                    const r = data.resetWeekSchedule.at;
+                    if (r) document.getElementById('resetWeekAt').value = toDatetimeLocalValue(nextOccurrenceDate(r.dow, r.hour, r.minute));
+                    syncEnhancedControl('resetWeekAt');
                 }
                 document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
                 const etNow = getETNowDate();
