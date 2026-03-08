@@ -2294,11 +2294,16 @@ app.post('/api/admin/add-player', async (req, res) => {
 
     const cleanFirstName = capitalizeFullName(firstName);
     const cleanLastName = capitalizeFullName(lastName);
-    if (!validatePhoneNumber(phone)) {
-        return res.status(400).json({ error: "Invalid phone number format" });
+    const formattedPhone = formatPhoneNumber(phone);
+
+    if (!validatePhoneNumber(formattedPhone)) {
+        return res.status(400).json({ error: "Phone number must be exactly 10 digits" });
     }
 
-    const formattedPhone = formatPhoneNumber(phone);
+    if (isDuplicatePlayer(cleanFirstName, cleanLastName, formattedPhone)) {
+        return res.status(400).json({ error: "A player with this name or phone number already exists" });
+    }
+
     const ratingNum = parseInt(rating) || 5;
     const isGoalieBool = isGoalie || false;
 
