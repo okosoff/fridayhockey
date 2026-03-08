@@ -1391,7 +1391,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Uses the exact ET date and time selected below.</div>
+                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
                     </div>
 
                     <div class="schedule-card">
@@ -1408,7 +1408,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Repeats weekly based on the selected weekday + time (ET).</div>
+                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
                     </div>
 
                     <div class="schedule-card">
@@ -1425,7 +1425,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Runs once at the exact ET date and time selected below. This clears players and waitlist, then auto-adds the default players.</div>
+                        <div class="schedule-hint">This clears players and waitlist, then auto-adds the default players at the exact ET date and time selected above.</div>
                     </div>
                 </div>
 
@@ -1561,7 +1561,7 @@
             <div class="fly-goalie-form">
                 <input type="text" id="flyGoalieFirstName" placeholder="First Name">
                 <input type="text" id="flyGoalieLastName" placeholder="Last Name">
-                <input type="tel" id="flyGoaliePhone" placeholder="Phone Number" inputmode="numeric" maxlength="14">
+                <input type="tel" id="flyGoaliePhone" placeholder="Phone Number">
             </div>
             <div class="fly-goalie-form" style="grid-template-columns: 1fr 2fr; margin-top:10px;">
                 <input type="number" id="flyGoalieRating" min="1" max="10" value="7" placeholder="Rating (1-10)">
@@ -1606,7 +1606,7 @@
                 <input type="text" id="newFirstName" placeholder="First Name">
                 <input type="text" id="newLastName" placeholder="Last Name">
             </div>
-            <input type="tel" id="newPhone" placeholder="Phone Number" inputmode="numeric" maxlength="14">
+            <input type="tel" id="newPhone" placeholder="Phone Number">
             <div class="form-row">
                 <input type="number" id="newRating" placeholder="Rating (1-10)" min="1" max="10">
                 <select id="newPayment">
@@ -1964,22 +1964,6 @@
             clockPointerDown = false;
         }
 
-
-        function formatExactDateTimeLabel(dtLocalValue) {
-            if (!dtLocalValue) return "OFF";
-            const d = new Date(dtLocalValue);
-            return new Intl.DateTimeFormat("en-US", {
-                timeZone: "America/New_York",
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true
-            }).format(d) + " ET";
-        }
-
         function parseSelectedDayTime(str) {
             // Expects like: "Friday 9:30 PM"
             if (!str || typeof str !== 'string') return null;
@@ -1997,29 +1981,28 @@
 
         function formatScheduleInfo(sData) {
             if (!sData) return "—";
-            const lock = sData.signupLockSchedule;
-            const rr = sData.rosterReleaseSchedule;
-            const reset = sData.resetWeekSchedule;
 
-            const lockLine = lock?.enabled
-                ? `${formatExactDateTimeLabel(sData.signupLockStartAt)} → ${formatExactDateTimeLabel(sData.signupLockEndAt)}`
+            const lockEnabled = !!sData.signupLockSchedule?.enabled;
+            const rrEnabled = !!sData.rosterReleaseSchedule?.enabled;
+            const resetEnabled = !!sData.resetWeekSchedule?.enabled;
+
+            const lockLine = lockEnabled && sData.signupLockStartAt && sData.signupLockEndAt
+                ? `${formatDayTimeFromDatetimeLocal(sData.signupLockStartAt)} → ${formatDayTimeFromDatetimeLocal(sData.signupLockEndAt)}`
                 : "OFF";
 
-            const rrLine = rr?.enabled
-                ? (sData.rosterReleaseAt
-                    ? formatExactDateTimeLabel(sData.rosterReleaseAt)
-                    : `${dayName(rr.at.dow)} ${pad2(rr.at.hour)}:${pad2(rr.at.minute)} weekly ET`)
+            const rrLine = rrEnabled && sData.rosterReleaseAt
+                ? formatDayTimeFromDatetimeLocal(sData.rosterReleaseAt)
                 : "OFF";
 
-            const resetLine = reset?.enabled
-                ? formatExactDateTimeLabel(sData.resetWeekAt)
+            const resetLine = resetEnabled && sData.resetWeekAt
+                ? formatDayTimeFromDatetimeLocal(sData.resetWeekAt)
                 : "OFF";
 
             return `
                 <strong>🔒 Signup Lock Window:</strong> ${lockLine}<br>
                 <strong>📋 Auto Roster Release:</strong> ${rrLine}<br>
                 <strong>♻️ Weekly Reset:</strong> ${resetLine}<br>
-                <span style="color:#aaa;">Signup lock and weekly reset use exact ET date/time. Auto roster release remains weekly unless you choose a new date/time and save it.</span>
+                <span style="color:#aaa;">Times use the exact ET date and time selected in the scheduler.</span>
             `;
         }
 
@@ -2352,87 +2335,15 @@
             }
         }
 
-
-        function capitalizeNamePart(part) {
-            return String(part || '')
-                .toLowerCase()
-                .replace(/(^|[\s'-])([a-z])/g, (m, sep, chr) => sep + chr.toUpperCase());
-        }
-
-        function capitalizeFullName(value) {
-            return String(value || '')
-                .trim()
-                .split(/\s+/)
-                .filter(Boolean)
-                .map(capitalizeNamePart)
-                .join(' ');
-        }
-
-        function normalizePhoneDigits(value) {
-            let digits = String(value || '').replace(/\D/g, '');
-            if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
-            return digits.slice(0, 10);
-        }
-
-        function formatPhoneInputValue(value) {
-            const digits = normalizePhoneDigits(value);
-            if (!digits) return '';
-            if (digits.length <= 3) return `(${digits}`;
-            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-        }
-
-        function attachAutoFormatBehavior(nameId, phoneId) {
-            const nameEl = document.getElementById(nameId);
-            const phoneEl = document.getElementById(phoneId);
-
-            if (nameEl && !nameEl.dataset.autoCapReady) {
-                nameEl.dataset.autoCapReady = 'true';
-                nameEl.addEventListener('blur', () => {
-                    nameEl.value = capitalizeFullName(nameEl.value);
-                });
-            }
-
-            if (phoneEl && !phoneEl.dataset.phoneFormatReady) {
-                phoneEl.dataset.phoneFormatReady = 'true';
-                phoneEl.addEventListener('input', () => {
-                    phoneEl.value = formatPhoneInputValue(phoneEl.value);
-                });
-                phoneEl.addEventListener('blur', () => {
-                    phoneEl.value = formatPhoneInputValue(phoneEl.value);
-                });
-            }
-        }
-
-        function getFormattedNameValue(id) {
-            const el = document.getElementById(id);
-            if (!el) return '';
-            el.value = capitalizeFullName(el.value);
-            return el.value.trim();
-        }
-
-        function getFormattedPhoneValue(id) {
-            const el = document.getElementById(id);
-            if (!el) return '';
-            el.value = formatPhoneInputValue(el.value);
-            return el.value.trim();
-        }
-
         // Add goalie on the fly
         async function addGoalieOnTheFly() {
-            const firstName = getFormattedNameValue('flyGoalieFirstName');
-            const lastName = getFormattedNameValue('flyGoalieLastName');
-            const phone = getFormattedPhoneValue('flyGoaliePhone');
+            const firstName = document.getElementById('flyGoalieFirstName').value.trim();
+            const lastName = document.getElementById('flyGoalieLastName').value.trim();
+            const phone = document.getElementById('flyGoaliePhone').value.trim();
             const rating = parseInt(document.getElementById('flyGoalieRating').value) || 7;
             
             if (!firstName || !lastName || !phone) {
                 alert("Please fill in all required fields (First Name, Last Name, Phone)");
-                return;
-            }
-
-            if (normalizePhoneDigits(phone).length !== 10) {
-                alert("Phone number must be exactly 10 digits");
-                document.getElementById('flyGoaliePhone').focus();
                 return;
             }
             
@@ -2591,18 +2502,13 @@
                 if (data.signupLockSchedule) {
                     document.getElementById('signupLockEnabled').checked = !!data.signupLockSchedule.enabled;
                     document.getElementById('signupLockStart').value = data.signupLockStartAt || '';
-                    syncEnhancedControl('signupLockStart');
                     document.getElementById('signupLockEnd').value = data.signupLockEndAt || '';
+                    syncEnhancedControl('signupLockStart');
                     syncEnhancedControl('signupLockEnd');
                 }
                 if (data.rosterReleaseSchedule) {
                     document.getElementById('rosterReleaseEnabled').checked = !!data.rosterReleaseSchedule.enabled;
-                    if (data.rosterReleaseAt) {
-                        document.getElementById('rosterReleaseAt').value = data.rosterReleaseAt;
-                    } else {
-                        const a = data.rosterReleaseSchedule.at;
-                        document.getElementById('rosterReleaseAt').value = a ? toDatetimeLocalValue(nextOccurrenceDate(a.dow, a.hour, a.minute)) : '';
-                    }
+                    document.getElementById('rosterReleaseAt').value = data.rosterReleaseAt || '';
                     syncEnhancedControl('rosterReleaseAt');
                 }
                 if (data.resetWeekSchedule) {
@@ -3260,21 +3166,15 @@
         }
 
         async function addPlayer() {
-            const firstName = getFormattedNameValue('newFirstName');
-            const lastName = getFormattedNameValue('newLastName');
-            const phone = getFormattedPhoneValue('newPhone');
+            const firstName = document.getElementById('newFirstName').value;
+            const lastName = document.getElementById('newLastName').value;
+            const phone = document.getElementById('newPhone').value;
             const rating = document.getElementById('newRating').value;
             const paymentMethod = document.getElementById('newPayment').value;
             const toWaitlist = document.getElementById('addToWaitlist').checked;
 
             if (!firstName || !lastName || !phone || !rating) {
                 alert("Please fill in all required fields");
-                return;
-            }
-
-            if (normalizePhoneDigits(phone).length !== 10) {
-                alert("Phone number must be exactly 10 digits");
-                document.getElementById('newPhone').focus();
                 return;
             }
 
@@ -3392,11 +3292,6 @@
         }
 
         initializeEnhancedDateTimeControls();
-        attachAutoFormatBehavior('newFirstName', 'newPhone');
-        attachAutoFormatBehavior('newLastName', 'newPhone');
-        attachAutoFormatBehavior('flyGoalieFirstName', 'flyGoaliePhone');
-        attachAutoFormatBehavior('flyGoalieLastName', 'flyGoaliePhone');
-
         checkSession();
     </script>
 
