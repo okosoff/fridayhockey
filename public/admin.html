@@ -1391,7 +1391,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">This repeats weekly based on the selected weekday + time (ET).</div>
+                        <div class="schedule-hint">Uses the exact ET date and time selected below.</div>
                     </div>
 
                     <div class="schedule-card">
@@ -1408,7 +1408,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Also repeats weekly based on the selected weekday + time (ET).</div>
+                        <div class="schedule-hint">Repeats weekly based on the selected weekday + time (ET).</div>
                     </div>
 
                     <div class="schedule-card">
@@ -1425,7 +1425,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">This clears players and waitlist, then auto-adds the default players. Repeats weekly in ET.</div>
+                        <div class="schedule-hint">Runs once at the exact ET date and time selected below. This clears players and waitlist, then auto-adds the default players.</div>
                     </div>
                 </div>
 
@@ -1964,6 +1964,22 @@
             clockPointerDown = false;
         }
 
+
+        function formatExactDateTimeLabel(dtLocalValue) {
+            if (!dtLocalValue) return "OFF";
+            const d = new Date(dtLocalValue);
+            return new Intl.DateTimeFormat("en-US", {
+                timeZone: "America/New_York",
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+            }).format(d) + " ET";
+        }
+
         function parseSelectedDayTime(str) {
             // Expects like: "Friday 9:30 PM"
             if (!str || typeof str !== 'string') return null;
@@ -1986,22 +2002,24 @@
             const reset = sData.resetWeekSchedule;
 
             const lockLine = lock?.enabled
-                ? `${dayName(lock.start.dow)} ${pad2(lock.start.hour)}:${pad2(lock.start.minute)} → ${dayName(lock.end.dow)} ${pad2(lock.end.hour)}:${pad2(lock.end.minute)}`
+                ? `${formatExactDateTimeLabel(sData.signupLockStartAt)} → ${formatExactDateTimeLabel(sData.signupLockEndAt)}`
                 : "OFF";
 
             const rrLine = rr?.enabled
-                ? `${dayName(rr.at.dow)} ${pad2(rr.at.hour)}:${pad2(rr.at.minute)}`
+                ? (sData.rosterReleaseAt
+                    ? formatExactDateTimeLabel(sData.rosterReleaseAt)
+                    : `${dayName(rr.at.dow)} ${pad2(rr.at.hour)}:${pad2(rr.at.minute)} weekly ET`)
                 : "OFF";
 
             const resetLine = reset?.enabled
-                ? `${dayName(reset.at.dow)} ${pad2(reset.at.hour)}:${pad2(reset.at.minute)}`
+                ? formatExactDateTimeLabel(sData.resetWeekAt)
                 : "OFF";
 
             return `
                 <strong>🔒 Signup Lock Window:</strong> ${lockLine}<br>
                 <strong>📋 Auto Roster Release:</strong> ${rrLine}<br>
                 <strong>♻️ Weekly Reset:</strong> ${resetLine}<br>
-                <span style="color:#aaa;">Times are interpreted in ET and repeat weekly.</span>
+                <span style="color:#aaa;">Signup lock and weekly reset use exact ET date/time. Auto roster release remains weekly unless you choose a new date/time and save it.</span>
             `;
         }
 
@@ -2500,23 +2518,24 @@
                 // Populate schedules
                 if (data.signupLockSchedule) {
                     document.getElementById('signupLockEnabled').checked = !!data.signupLockSchedule.enabled;
-                    const s = data.signupLockSchedule.start;
-                    const e = data.signupLockSchedule.end;
-                    if (s) document.getElementById('signupLockStart').value = toDatetimeLocalValue(nextOccurrenceDate(s.dow, s.hour, s.minute));
+                    document.getElementById('signupLockStart').value = data.signupLockStartAt || '';
                     syncEnhancedControl('signupLockStart');
-                    if (e) document.getElementById('signupLockEnd').value = toDatetimeLocalValue(nextOccurrenceDate(e.dow, e.hour, e.minute));
+                    document.getElementById('signupLockEnd').value = data.signupLockEndAt || '';
                     syncEnhancedControl('signupLockEnd');
                 }
                 if (data.rosterReleaseSchedule) {
                     document.getElementById('rosterReleaseEnabled').checked = !!data.rosterReleaseSchedule.enabled;
-                    const a = data.rosterReleaseSchedule.at;
-                    if (a) document.getElementById('rosterReleaseAt').value = toDatetimeLocalValue(nextOccurrenceDate(a.dow, a.hour, a.minute));
+                    if (data.rosterReleaseAt) {
+                        document.getElementById('rosterReleaseAt').value = data.rosterReleaseAt;
+                    } else {
+                        const a = data.rosterReleaseSchedule.at;
+                        document.getElementById('rosterReleaseAt').value = a ? toDatetimeLocalValue(nextOccurrenceDate(a.dow, a.hour, a.minute)) : '';
+                    }
                     syncEnhancedControl('rosterReleaseAt');
                 }
                 if (data.resetWeekSchedule) {
                     document.getElementById('resetWeekEnabled').checked = !!data.resetWeekSchedule.enabled;
-                    const r = data.resetWeekSchedule.at;
-                    if (r) document.getElementById('resetWeekAt').value = toDatetimeLocalValue(nextOccurrenceDate(r.dow, r.hour, r.minute));
+                    document.getElementById('resetWeekAt').value = data.resetWeekAt || '';
                     syncEnhancedControl('resetWeekAt');
                 }
                 document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);

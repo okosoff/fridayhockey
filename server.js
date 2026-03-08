@@ -82,6 +82,23 @@ function getGameDayName() {
     return parseGameTimeString(gameTime).dayName;
 }
 
+
+const FRIDAY_SIGNUP_CODE = '9855';
+const SUNDAY_SIGNUP_CODE = '7666';
+const DEFAULT_SIGNUP_CODE = FRIDAY_SIGNUP_CODE;
+
+function getDynamicSignupCode(dayName = getGameDayName()) {
+    const day = String(dayName || '').trim().toLowerCase();
+    if (day === 'friday') return FRIDAY_SIGNUP_CODE;
+    if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
+    return DEFAULT_SIGNUP_CODE;
+}
+
+function refreshDynamicSignupCode() {
+    playerSignupCode = getDynamicSignupCode();
+    return playerSignupCode;
+}
+
 function calculateNextGameDate() {
     // Calculate next occurrence of the configured game day/time in America/New_York
     const now = new Date();
@@ -103,8 +120,8 @@ function calculateNextGameDate() {
     return next.toISOString().split("T")[0];
 }
 
-// Player signup password protection - FIXED DEFAULT CODE
-let playerSignupCode = '';
+// Player signup password protection - dynamic by game day
+let playerSignupCode = DEFAULT_SIGNUP_CODE;
 let requirePlayerCode = true;
 let manualOverride = false;
 let manualOverrideState = null;
@@ -114,13 +131,15 @@ let signupLockStartAt = '';
 let signupLockEndAt = '';
 let rosterReleaseAt = '';
 let resetWeekAt = '';
+let lastExactResetRunAt = '';
 
-// Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
+// Admin-configurable schedules
+// Signup lock and weekly reset run from exact admin-selected ET datetimes.
+// Auto roster release remains a weekly schedule based on the selected weekday + time.
 let signupLockSchedule = {
-    enabled: true,
-    // Default: Fri 5:00 PM ET -> Mon 6:00 PM ET
-    start: { dow: 5, hour: 17, minute: 0 },
-    end:   { dow: 1, hour: 18, minute: 0 }
+    enabled: false,
+    start: null,
+    end: null
 };
 
 let rosterReleaseSchedule = {
@@ -130,9 +149,8 @@ let rosterReleaseSchedule = {
 };
 
 let resetWeekSchedule = {
-    enabled: true,
-    // Default: Sat 12:00 AM ET
-    at: { dow: 6, hour: 0, minute: 0 }
+    enabled: false,
+    at: null
 };
 
 
@@ -304,16 +322,32 @@ function clampInt(n, fallback) {
 }
 
 function parseDatetimeLocalToDowTime(dtLocalStr) {
-    // dtLocalStr like "2026-03-03T17:00" (no timezone); treat as America/New_York for schedule purposes.
+    // Treat admin-entered datetime-local as ET wall-clock exactly as entered.
     if (!dtLocalStr || typeof dtLocalStr !== 'string' || !dtLocalStr.includes('T')) return null;
+
     const [dPart, tPart] = dtLocalStr.split('T');
     const [y, m, d] = dPart.split('-').map(v => clampInt(v, NaN));
     const [hh, mm] = tPart.split(':').map(v => clampInt(v, NaN));
+
     if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
-    // Create a Date in server local timezone but compute weekday in ET using locale conversion.
-    const local = new Date(y, (m - 1), d, hh, mm, 0, 0);
-    const et = new Date(local.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    return { dow: et.getDay(), hour: hh, minute: mm };
+
+    // Compute weekday from the calendar date only.
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+
+    return { dow, hour: hh, minute: mm };
+}
+
+function parseDatetimeLocalToETDate(dtLocalStr) {
+    // Returns a lightweight object representing ET wall-clock time exactly as entered.
+    if (!dtLocalStr || typeof dtLocalStr !== 'string' || !dtLocalStr.includes('T')) return null;
+
+    const [dPart, tPart] = dtLocalStr.split('T');
+    const [y, m, d] = dPart.split('-').map(v => clampInt(v, NaN));
+    const [hh, mm] = tPart.split(':').map(v => clampInt(v, NaN));
+
+    if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
+
+    return { year: y, month: m, day: d, hour: hh, minute: mm };
 }
 
 function weekMinute(dow, hour, minute) {
@@ -332,86 +366,111 @@ function isInWeeklyWindow(etDate, start, end) {
 }
 
 function shouldBeLocked() {
-    const etTime = getCurrentETTime();
     if (!signupLockSchedule || !signupLockSchedule.enabled) return false;
-    return isInWeeklyWindow(etTime, signupLockSchedule.start, signupLockSchedule.end);
+    if (!signupLockStartAt || !signupLockEndAt) return false;
+
+    const etNow = getCurrentETTime();
+    const startAt = parseDatetimeLocalToETDate(signupLockStartAt);
+    const endAt = parseDatetimeLocalToETDate(signupLockEndAt);
+
+    if (!startAt || !endAt) return false;
+
+    const nowKey = (
+        etNow.getFullYear() * 100000000 +
+        (etNow.getMonth() + 1) * 1000000 +
+        etNow.getDate() * 10000 +
+        etNow.getHours() * 100 +
+        etNow.getMinutes()
+    );
+
+    const startKey = (
+        startAt.year * 100000000 +
+        startAt.month * 1000000 +
+        startAt.day * 10000 +
+        startAt.hour * 100 +
+        startAt.minute
+    );
+
+    const endKey = (
+        endAt.year * 100000000 +
+        endAt.month * 1000000 +
+        endAt.day * 10000 +
+        endAt.hour * 100 +
+        endAt.minute
+    );
+
+    if (endKey <= startKey) return false;
+
+    return nowKey >= startKey && nowKey < endKey;
 }
 
 function checkAutoLock() {
+    refreshDynamicSignupCode();
     const etTime = getCurrentETTime();
 
-    // Check if we should be locked based on schedule (this is the source of truth)
-    const shouldLock = shouldBeLocked();
-
-    // Roster released case: If roster is released and we're in the scheduled lock window, lock it
-    // The schedule controls BOTH locking and unlocking - no manual override needed
-    if (rosterReleased && shouldLock) {
-        if (!requirePlayerCode) {
+    if (rosterReleased) {
+        if (!requirePlayerCode || manualOverrideState !== 'locked' || !manualOverride) {
             requirePlayerCode = true;
+    lastExactResetRunAt = '';
+            manualOverride = true;
+            manualOverrideState = 'locked';
             saveData();
         }
-        return { 
-            requirePlayerCode: true, 
-            manualOverride: false, 
-            manualOverrideState: null,
+        return {
+            requirePlayerCode: true,
+            manualOverride: true,
+            manualOverrideState: 'locked',
             isLockedWindow: true,
-            rosterReleased: true 
+            rosterReleased: true
         };
     }
 
-    // Admin manual override: Only apply if explicitly set and different from schedule
+    const shouldLock = shouldBeLocked();
+
     if (manualOverride && manualOverrideState) {
-        if (manualOverrideState === 'locked' && !shouldLock) {
-            // Admin manually locked it outside schedule window
+        if (manualOverrideState === 'locked') {
             if (!requirePlayerCode) {
                 requirePlayerCode = true;
                 saveData();
             }
-            return { 
-                requirePlayerCode: true, 
-                manualOverride: true, 
+            return {
+                requirePlayerCode: true,
+                manualOverride: true,
                 manualOverrideState: 'locked',
                 isLockedWindow: shouldLock,
-                rosterReleased 
+                rosterReleased
             };
-        } else if (manualOverrideState === 'open' && shouldLock) {
-            // Admin manually opened it during schedule window
+        } else if (manualOverrideState === 'open') {
             if (requirePlayerCode) {
                 requirePlayerCode = false;
                 saveData();
             }
-            return { 
-                requirePlayerCode: false, 
-                manualOverride: true, 
+            return {
+                requirePlayerCode: false,
+                manualOverride: true,
                 manualOverrideState: 'open',
                 isLockedWindow: shouldLock,
-                rosterReleased 
+                rosterReleased
             };
         }
-        // If manual override matches schedule, clear it and let schedule control
-        manualOverride = false;
-        manualOverrideState = null;
     }
 
-    // Follow schedule exactly
     if (shouldLock) {
         if (!requirePlayerCode) {
             requirePlayerCode = true;
             saveData();
         }
-    } else {
-        if (requirePlayerCode) {
-            requirePlayerCode = false;
-            saveData();
-        }
+    } else if (requirePlayerCode) {
+        requirePlayerCode = false;
+        saveData();
     }
 
-    return { 
-        requirePlayerCode, 
-        manualOverride: false, 
+    return {
+        requirePlayerCode,
+        manualOverride: false,
         manualOverrideState: null,
         isLockedWindow: shouldLock,
-        rosterReleased 
+        rosterReleased
     };
 }
 
@@ -421,7 +480,7 @@ async function autoReleaseRoster() {
     const day = etTime.getDay();
     const hour = etTime.getHours();
     const minute = etTime.getMinutes();
-
+    
     if (rosterReleaseSchedule && rosterReleaseSchedule.enabled &&
         day === rosterReleaseSchedule.at.dow &&
         hour === rosterReleaseSchedule.at.hour &&
@@ -430,14 +489,13 @@ async function autoReleaseRoster() {
         try {
             const { week, year } = getWeekNumber(etTime);
             const teams = generateFairTeams();
-
+            
             rosterReleased = true;
-            // Lock signup when roster releases - schedule will control when it unlocks
+            refreshDynamicSignupCode();
             requirePlayerCode = true;
-            // Don't set manualOverride - let the schedule control unlocking
-            manualOverride = false;
-            manualOverrideState = null;
-
+            manualOverride = true;
+            manualOverrideState = 'locked';
+            
             currentWeekData = {
                 weekNumber: week,
                 year: year,
@@ -446,14 +504,14 @@ async function autoReleaseRoster() {
                 whiteTeam: teams.whiteTeam,
                 darkTeam: teams.darkTeam
             };
-
+            
             for (const player of players) {
                 await pool.query('UPDATE players SET team = $1 WHERE id = $2', [player.team, player.id]);
             }
-
+            
             await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
             await saveData();
-
+            
         } catch (error) {
             console.error('Auto-release error:', error);
         }
@@ -524,76 +582,148 @@ async function addAutoPlayers() {
     return addedCount;
 }
 
-// Weekly reset - admin-configurable schedule (ET)
-async function checkWeeklyReset() {
+
+
+function checkMaintenanceModeSchedule() {
     const etTime = getCurrentETTime();
-    const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
     const day = etTime.getDay();
     const hour = etTime.getHours();
     const minute = etTime.getMinutes();
 
-    if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
+    // Turn ON Saturday 12:00 AM ET
+    if (day === 6 && hour === 0 && minute === 0 && maintenanceMode !== true) {
+        maintenanceMode = true;
+        saveData();
+        return true;
+    }
 
-    if (
-        day === resetWeekSchedule.at.dow &&
-        hour === resetWeekSchedule.at.hour &&
-        minute === resetWeekSchedule.at.minute &&
-        (lastResetWeek !== currentWeek || currentWeekData.year !== currentYear)
-    ) {
-        if (rosterReleased && currentWeekData.weekNumber && 
-            (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0)) {
-            await saveWeekHistory(
-                currentWeekData.year,
-                currentWeekData.weekNumber,
-                currentWeekData.whiteTeam,
-                currentWeekData.darkTeam
-            );
-        }
-
-        playerSpots = 20;
-        players = []; 
-        waitlist = [];
-        rosterReleased = false;
-        lastResetWeek = currentWeek;
-        gameDate = calculateNextGameDate();
-
-        currentWeekData = {
-            weekNumber: currentWeek,
-            year: currentYear,
-            releaseDate: null,
-            whiteTeam: [],
-            darkTeam: []
-        };
-
-        manualOverride = false;
-        manualOverrideState = null;
-        requirePlayerCode = true;
-
-        if (pool) {
-            try {
-                await pool.query('DELETE FROM players');
-                await pool.query('DELETE FROM waitlist');
-            } catch (err) {
-                console.error('Error clearing data during scheduled reset:', err);
-            }
-        }
-
-        await addAutoPlayers();
-        await saveData();
+    // Turn OFF Saturday 12:00 PM ET
+    if (day === 6 && hour === 12 && minute === 0 && maintenanceMode !== false) {
+        maintenanceMode = false;
+        saveData();
         return true;
     }
 
     return false;
 }
 
-const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 30000 : 5000;
+// Weekly reset - runs from exact admin-selected ET datetime only
+async function checkWeeklyReset() {
+    const etTime = getCurrentETTime();
+    const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
 
-setInterval(async () => {
-    checkAutoLock();
-    await autoReleaseRoster();
-    await checkWeeklyReset();
+    if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
+    if (!resetWeekAt) return false;
+
+    let shouldRunReset = false;
+
+    const exactResetAt = parseDatetimeLocalToETDate(resetWeekAt);
+    if (exactResetAt) {
+        const exactKey = resetWeekAt;
+
+        const nowKey = (
+            etTime.getFullYear() * 100000000 +
+            (etTime.getMonth() + 1) * 1000000 +
+            etTime.getDate() * 10000 +
+            etTime.getHours() * 100 +
+            etTime.getMinutes()
+        );
+
+        const resetKeyNum = (
+            exactResetAt.year * 100000000 +
+            exactResetAt.month * 1000000 +
+            exactResetAt.day * 10000 +
+            exactResetAt.hour * 100 +
+            exactResetAt.minute
+        );
+
+        if (nowKey >= resetKeyNum && lastExactResetRunAt !== exactKey) {
+            shouldRunReset = true;
+        }
+    }
+
+    if (!shouldRunReset) return false;
+
+    if (rosterReleased && currentWeekData.weekNumber && 
+        (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0)) {
+        await saveWeekHistory(
+            currentWeekData.year,
+            currentWeekData.weekNumber,
+            currentWeekData.whiteTeam,
+            currentWeekData.darkTeam
+        );
+    }
+
+    playerSpots = 20;
+    players = []; 
+    waitlist = [];
+    rosterReleased = false;
+    lastResetWeek = currentWeek;
+    gameDate = calculateNextGameDate();
+
+    currentWeekData = {
+        weekNumber: currentWeek,
+        year: currentYear,
+        releaseDate: null,
+        whiteTeam: [],
+        darkTeam: []
+    };
+
+    manualOverride = false;
+    manualOverrideState = null;
+    requirePlayerCode = true;
+    maintenanceMode = false;
+    refreshDynamicSignupCode();
+
+    if (resetWeekAt) {
+        lastExactResetRunAt = resetWeekAt;
+        resetWeekAt = '';
+    }
+
+    if (pool) {
+        try {
+            await pool.query('DELETE FROM players');
+            await pool.query('DELETE FROM waitlist');
+        } catch (err) {
+            console.error('Error clearing data during scheduled reset:', err);
+        }
+    }
+
+    await addAutoPlayers();
     await saveData();
-}, CHECK_INTERVAL);
+    return true;
+}
+
+const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
+let schedulerRunning = false;
+let schedulerLastMinuteKey = '';
+
+async function runSchedulerTick() {
+    if (schedulerRunning) return;
+    schedulerRunning = true;
+
+    try {
+        const etNow = getCurrentETTime();
+        const minuteKey = `${etNow.getFullYear()}-${String(etNow.getMonth() + 1).padStart(2, '0')}-${String(etNow.getDate()).padStart(2, '0')} ${String(etNow.getHours()).padStart(2, '0')}:${String(etNow.getMinutes()).padStart(2, '0')}`;
+
+        // Only allow one full scheduler pass per ET minute, even if the interval fires multiple times.
+        if (schedulerLastMinuteKey === minuteKey) return;
+        schedulerLastMinuteKey = minuteKey;
+
+        checkMaintenanceModeSchedule();
+        checkAutoLock();
+        await autoReleaseRoster();
+        await checkWeeklyReset();
+        await saveData();
+    } catch (error) {
+        console.error('Scheduler tick failed:', error);
+    } finally {
+        schedulerRunning = false;
+    }
+}
+
+setInterval(runSchedulerTick, CHECK_INTERVAL);
+setTimeout(runSchedulerTick, 1000);
 
 // --- DATABASE FUNCTIONS ---
 
@@ -698,9 +828,11 @@ async function loadDataFromDB() {
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
         if (settings.resetWeekAt !== undefined) resetWeekAt = settings.resetWeekAt || '';
+        if (settings.lastExactResetRunAt !== undefined) lastExactResetRunAt = settings.lastExactResetRunAt || '';
         if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
         if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
         if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
+        refreshDynamicSignupCode();
         
         const playersRes = await pool.query('SELECT * FROM players ORDER BY registered_at');
         players = playersRes.rows.map(p => ({
@@ -783,6 +915,7 @@ async function saveData() {
         await saveSetting('signupLockEndAt', signupLockEndAt);
         await saveSetting('rosterReleaseAt', rosterReleaseAt);
         await saveSetting('resetWeekAt', resetWeekAt);
+        await saveSetting('lastExactResetRunAt', lastExactResetRunAt);
         await saveSetting('signupLockSchedule', signupLockSchedule);
         await saveSetting('rosterReleaseSchedule', rosterReleaseSchedule);
         await saveSetting('resetWeekSchedule', resetWeekSchedule);
@@ -817,6 +950,7 @@ function loadDataFromFile() {
             signupLockEndAt = data.signupLockEndAt ?? '';
             rosterReleaseAt = data.rosterReleaseAt ?? '';
             resetWeekAt = data.resetWeekAt ?? '';
+            lastExactResetRunAt = data.lastExactResetRunAt ?? '';
             signupLockSchedule = data.signupLockSchedule ?? signupLockSchedule;
             rosterReleaseSchedule = data.rosterReleaseSchedule ?? rosterReleaseSchedule;
             resetWeekSchedule = data.resetWeekSchedule ?? resetWeekSchedule;
@@ -830,12 +964,14 @@ function loadDataFromFile() {
             // Load new settings
             maintenanceMode = data.maintenanceMode ?? false;
             customTitle = data.customTitle ?? `Phan's ${getGameDayName()} Hockey`;
+            refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
         }
     } catch (err) {
         console.error('Error loading data:', err);
         gameDate = calculateNextGameDate();
+        refreshDynamicSignupCode();
     }
 }
 
@@ -1153,18 +1289,28 @@ app.get('/', (req, res) => {
     return sendPublic(res, 'index.html');
 });
 
-function parseDatetimeLocalToETDate(dtLocalStr) {
-    if (!dtLocalStr || typeof dtLocalStr !== 'string' || !dtLocalStr.includes('T')) return null;
-    const [dPart, tPart] = dtLocalStr.split('T');
-    const [y, m, d] = dPart.split('-').map(v => clampInt(v, NaN));
-    const [hh, mm] = tPart.split(':').map(v => clampInt(v, NaN));
-    if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
-    // Treat admin-entered datetime-local as ET wall clock.
-    return new Date(y, (m - 1), d, hh, mm, 0, 0);
+
+function formatETDateTimeLong(etParts) {
+    if (!etParts) return '';
+
+    const weekday = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
+        weekday: 'long'
+    }).format(new Date(Date.UTC(etParts.year, etParts.month - 1, etParts.day)));
+
+    const monthName = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
+        month: 'long'
+    }).format(new Date(Date.UTC(etParts.year, etParts.month - 1, etParts.day)));
+
+    const hour12 = ((etParts.hour + 11) % 12) + 1;
+    const ampm = etParts.hour >= 12 ? 'PM' : 'AM';
+
+    return `${weekday}, ${monthName} ${etParts.day}, ${etParts.year} at ${hour12}:${String(etParts.minute).padStart(2, '0')} ${ampm} ET`;
 }
 
-function formatETDateTimeLong(date) {
-    if (!date) return null;
+function formatRealDateAsETLong(date) {
+    if (!date || !(date instanceof Date) || Number.isNaN(date.getTime())) return '';
     return new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/New_York',
         weekday: 'long',
@@ -1177,14 +1323,10 @@ function formatETDateTimeLong(date) {
     }).format(date) + ' ET';
 }
 
-function formatETWallClockFromDatetimeLocal(dtLocalStr) {
-    const d = parseDatetimeLocalToETDate(dtLocalStr);
-    return d ? formatETDateTimeLong(d) : null;
-}
-
 function getNextScheduleOccurrence(schedulePoint) {
     if (!schedulePoint) return null;
-    const etNow = getCurrentETTime();
+    const now = new Date();
+    const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const currentDow = etNow.getDay();
     let daysAhead = (schedulePoint.dow - currentDow + 7) % 7;
 
@@ -1201,59 +1343,43 @@ function getNextScheduleOccurrence(schedulePoint) {
 }
 
 function getSignupOpenMessageData() {
+    const nextOpenAt = (
+        signupLockSchedule &&
+        signupLockSchedule.enabled &&
+        signupLockEndAt
+    ) ? parseDatetimeLocalToETDate(signupLockEndAt) : null;
+    const openLabel = nextOpenAt ? formatETDateTimeLong(nextOpenAt) : null;
+    const nextOpenAtIso = nextOpenAt
+        ? `${nextOpenAt.year}-${String(nextOpenAt.month).padStart(2, '0')}-${String(nextOpenAt.day).padStart(2, '0')}T${String(nextOpenAt.hour).padStart(2, '0')}:${String(nextOpenAt.minute).padStart(2, '0')}:00`
+        : null;
+
     const gameDayName = getGameDayName();
-
-    // Calculate next unlock time from the schedule (not from saved timestamps)
-    let nextOpenAt = null;
-    let openLabel = null;
-
-    if (signupLockSchedule && signupLockSchedule.enabled && signupLockSchedule.end) {
-        nextOpenAt = getNextScheduleOccurrence(signupLockSchedule.end);
-        if (nextOpenAt) {
-            openLabel = formatETDateTimeLong(nextOpenAt);
-        }
-    }
-
-    // Fallback to exact timestamps if schedule not available
-    if (!openLabel) {
-        const exactOpenLabel = formatETWallClockFromDatetimeLocal(signupLockEndAt);
-        if (exactOpenLabel) {
-            openLabel = exactOpenLabel;
-        }
-    }
-
-    // Final fallback
-    if (!openLabel) {
-        openLabel = `${gameDayName} at 6:00 PM ET`;
-    }
-
-    // Calculate roster release time
-    const exactRosterLabel = formatETWallClockFromDatetimeLocal(rosterReleaseAt);
-    const exactRosterAt = parseDatetimeLocalToETDate(rosterReleaseAt);
-    const nextRosterAt = getNextScheduleOccurrence(rosterReleaseSchedule && rosterReleaseSchedule.at ? rosterReleaseSchedule.at : null);
-    const rosterLabel = exactRosterLabel || (nextRosterAt ? formatETDateTimeLong(nextRosterAt) : null);
+    const releasePoint = rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at
+        ? rosterReleaseSchedule.at
+        : null;
+    const nextRosterReleaseAt = releasePoint ? getNextScheduleOccurrence(releasePoint) : null;
+    const rosterReleaseLabel = nextRosterReleaseAt ? formatRealDateAsETLong(nextRosterReleaseAt) : null;
 
     return {
         gameDayName,
-        nextOpenAtIso: nextOpenAt ? nextOpenAt.toISOString() : (exactRosterAt ? exactRosterAt.toISOString() : null),
+        nextOpenAtIso,
         nextOpenAtLabel: openLabel,
         lockNoticeLine: '',
         openLine: openLabel
             ? `✅ Signup opens to all players on ${openLabel}`
             : '✅ Signup opens to all players at the scheduled unlock time',
         noCodeLine: 'No code required after signup opens to all players.',
-        rosterReleaseAtIso: exactRosterAt ? exactRosterAt.toISOString() : (nextRosterAt ? nextRosterAt.toISOString() : null),
-        rosterReleaseLabel: rosterLabel,
-        rosterReleaseHeadline: rosterLabel
-            ? `📅 Check Back ${rosterLabel}`
+        rosterReleaseAtIso: nextRosterReleaseAt ? nextRosterReleaseAt.toISOString() : null,
+        rosterReleaseLabel,
+        rosterReleaseHeadline: rosterReleaseLabel
+            ? `📅 Check Back ${rosterReleaseLabel}`
             : `📅 Check Back ${gameDayName} at 5:00 PM ET`,
-        rosterReleaseLine: rosterLabel
-            ? `Team rosters are released on ${rosterLabel}.`
+        rosterReleaseLine: rosterReleaseLabel
+            ? `Team rosters are released on ${rosterReleaseLabel}.`
             : `Team rosters are released every ${gameDayName} at 5:00 PM ET.`
     };
 }
 
-// ============================================
 // ============================================
 // MODIFIED PUBLIC API - ADD MAINTENANCE MODE & CUSTOM TITLE
 // ============================================
@@ -1263,6 +1389,7 @@ app.get('/api/status', (req, res) => {
     const { week, year } = getWeekNumber(etTime);
     const signupMessageData = getSignupOpenMessageData();
     
+    const playerCount = getPlayerCount();
     const goalieCount = getGoalieCount();
     
     // STRIP all sensitive data from public players list
@@ -1300,6 +1427,7 @@ app.get('/api/status', (req, res) => {
         currentYear: year,
         rules: GAME_RULES,
         players: publicPlayers,  // Sanitized - no ratings, no payment info
+        // NEW FIELDS - ADD THESE
         maintenanceMode: maintenanceMode,
         customTitle: customTitle,
         arenaOptions: ARENA_OPTIONS,
@@ -1310,9 +1438,6 @@ app.get('/api/status', (req, res) => {
         lockNoticeLine: signupMessageData.lockNoticeLine,
         openLine: signupMessageData.openLine,
         noCodeLine: signupMessageData.noCodeLine,
-        rosterReleaseAt: signupMessageData.rosterReleaseAtIso,
-        rosterReleaseLabel: signupMessageData.rosterReleaseLabel,
-        rosterReleaseHeadline: signupMessageData.rosterReleaseHeadline,
         rosterReleaseLine: signupMessageData.rosterReleaseLine
     });
 });
@@ -1443,6 +1568,7 @@ app.delete('/api/admin/history/:year/:week', async (req, res) => {
 });
 
 app.post('/api/verify-code', (req, res) => {
+    refreshDynamicSignupCode();
     checkAutoLock();
     
     const { code } = req.body;
@@ -1459,9 +1585,14 @@ app.post('/api/verify-code', (req, res) => {
 });
 
 app.post('/api/register-init', async (req, res) => {
+    refreshDynamicSignupCode();
     checkAutoLock();
 
     const { firstName, lastName, phone, paymentMethod, rating, signupCode } = req.body;
+
+    if (rosterReleased) {
+        return res.status(403).json({ error: 'Signup is closed after roster release.' });
+    }
 
     if (!firstName || !lastName || !phone || !paymentMethod || !rating) {
         return res.status(400).json({ error: "All fields are required." });
@@ -1922,7 +2053,11 @@ app.post('/api/admin/settings', (req, res) => {
         rosterReleased,
         signupLockSchedule,
         rosterReleaseSchedule,
-        resetWeekSchedule
+        resetWeekSchedule,
+        signupLockStartAt,
+        signupLockEndAt,
+        rosterReleaseAt,
+        resetWeekAt
     });
 });
 
@@ -1964,7 +2099,7 @@ app.post('/api/admin/update-code', (req, res) => {
         return res.status(400).json({ error: "Code must be exactly 4 digits" });
     }
     
-    playerSignupCode = newCode;
+    playerSignupCode = getDynamicSignupCode();
     saveData();
     
     res.json({ 
@@ -1988,8 +2123,8 @@ app.post('/api/admin/update-schedules', (req, res) => {
     }
     const start = parseDatetimeLocalToDowTime(signupLockStart);
     const end = parseDatetimeLocalToDowTime(signupLockEnd);
-    if (start) signupLockSchedule.start = start;
-    if (end) signupLockSchedule.end = end;
+    signupLockSchedule.start = start || null;
+    signupLockSchedule.end = end || null;
 
     // Roster auto-release schedule
     if (typeof rosterReleaseEnabled === 'boolean') {
@@ -2003,12 +2138,13 @@ app.post('/api/admin/update-schedules', (req, res) => {
         resetWeekSchedule.enabled = resetWeekEnabled;
     }
     const resetAt = parseDatetimeLocalToDowTime(resetWeekAtInput);
-    if (resetAt) resetWeekSchedule.at = resetAt;
+    resetWeekSchedule.at = resetAt || null;
 
-    signupLockStartAt = signupLockStart || signupLockStartAt;
-    signupLockEndAt = signupLockEnd || signupLockEndAt;
-    rosterReleaseAt = rosterReleaseAtInput || rosterReleaseAt;
-    resetWeekAt = resetWeekAtInput || resetWeekAt;
+    // Keep the latest admin-entered values in sync; do not preserve stale older datetimes.
+    signupLockStartAt = signupLockStart || '';
+    signupLockEndAt = signupLockEnd || '';
+    rosterReleaseAt = rosterReleaseAtInput || '';
+    resetWeekAt = resetWeekAtInput || '';
 
     saveData();
     const lockStatus = checkAutoLock();
@@ -2391,9 +2527,8 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         rosterReleased = true;
         requirePlayerCode = true;
-        // Schedule controls locking/unlocking - no manual override needed
-            manualOverride = false;
-            manualOverrideState = null;  // Force locked state
+        manualOverride = true;  // Keep locked after manual release
+        manualOverrideState = 'locked';  // Force locked state
         
         currentWeekData = {
             weekNumber: week,
@@ -2463,6 +2598,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     manualOverride = false;
     manualOverrideState = null;
     requirePlayerCode = true;
+    lastExactResetRunAt = '';
     
     // Code stays as 9855 - no auto-generation
     
@@ -2611,7 +2747,7 @@ initDatabase().then(() => {
         console.log(`Location: ${gameLocation}`);
         console.log(`Time: ${gameTime}`);
         console.log(`Date: ${gameDate}`);
-        console.log(`Current signup code: ${playerSignupCode}`);
+        console.log(`Current signup code: ${getDynamicSignupCode()}`);
         console.log(`Current players registered: ${players.length}`);
     });
 }).catch(err => {
