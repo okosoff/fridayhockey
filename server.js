@@ -176,7 +176,7 @@ const AUTO_ADD_PLAYERS = [
         firstName: "Phan",
         lastName: "Ly",
         phone: "(519) 566-9288",
-        rating: 7,
+        rating: 6,
         isGoalie: false,
         isFree: true,
         paymentMethod: "FREE",
@@ -339,45 +339,30 @@ function shouldBeLocked() {
 
 function checkAutoLock() {
     const etTime = getCurrentETTime();
-    const day = etTime.getDay();
-    const hour = etTime.getHours();
-    
-    if (rosterReleased) {
-        if ((day === 5 && hour >= 17) || day === 6 || day === 0 || (day === 1 && hour < 18)) {
-            if (manualOverride && manualOverrideState === 'open') {
-                if (requirePlayerCode) {
-                    requirePlayerCode = false;
-                    saveData();
-                }
-                return { 
-                    requirePlayerCode: false, 
-                    manualOverride: true, 
-                    manualOverrideState: manualOverrideState,
-                    isLockedWindow: true,
-                    rosterReleased: true 
-                };
-            }
-            
-            if (!requirePlayerCode) {
-                requirePlayerCode = true;
-                manualOverride = false;
-                manualOverrideState = null;
-                saveData();
-            }
-            return { 
-                requirePlayerCode: true, 
-                manualOverride: false, 
-                manualOverrideState: null,
-                isLockedWindow: true,
-                rosterReleased: true 
-            };
-        }
-    }
-    
+
+    // Check if we should be locked based on schedule (this is the source of truth)
     const shouldLock = shouldBeLocked();
-    
+
+    // Roster released case: If roster is released and we're in the scheduled lock window, lock it
+    // The schedule controls BOTH locking and unlocking - no manual override needed
+    if (rosterReleased && shouldLock) {
+        if (!requirePlayerCode) {
+            requirePlayerCode = true;
+            saveData();
+        }
+        return { 
+            requirePlayerCode: true, 
+            manualOverride: false, 
+            manualOverrideState: null,
+            isLockedWindow: true,
+            rosterReleased: true 
+        };
+    }
+
+    // Admin manual override: Only apply if explicitly set and different from schedule
     if (manualOverride && manualOverrideState) {
-        if (manualOverrideState === 'locked') {
+        if (manualOverrideState === 'locked' && !shouldLock) {
+            // Admin manually locked it outside schedule window
             if (!requirePlayerCode) {
                 requirePlayerCode = true;
                 saveData();
@@ -389,7 +374,8 @@ function checkAutoLock() {
                 isLockedWindow: shouldLock,
                 rosterReleased 
             };
-        } else if (manualOverrideState === 'open') {
+        } else if (manualOverrideState === 'open' && shouldLock) {
+            // Admin manually opened it during schedule window
             if (requirePlayerCode) {
                 requirePlayerCode = false;
                 saveData();
@@ -402,21 +388,24 @@ function checkAutoLock() {
                 rosterReleased 
             };
         }
+        // If manual override matches schedule, clear it and let schedule control
+        manualOverride = false;
+        manualOverrideState = null;
     }
-    
+
+    // Follow schedule exactly
     if (shouldLock) {
         if (!requirePlayerCode) {
             requirePlayerCode = true;
             saveData();
         }
     } else {
-        // Don't auto-unlock if roster is released and was manually locked
-        if (requirePlayerCode && !(rosterReleased && manualOverride && manualOverrideState === 'locked')) {
+        if (requirePlayerCode) {
             requirePlayerCode = false;
             saveData();
         }
     }
-    
+
     return { 
         requirePlayerCode, 
         manualOverride: false, 
@@ -432,7 +421,7 @@ async function autoReleaseRoster() {
     const day = etTime.getDay();
     const hour = etTime.getHours();
     const minute = etTime.getMinutes();
-    
+
     if (rosterReleaseSchedule && rosterReleaseSchedule.enabled &&
         day === rosterReleaseSchedule.at.dow &&
         hour === rosterReleaseSchedule.at.hour &&
@@ -441,12 +430,14 @@ async function autoReleaseRoster() {
         try {
             const { week, year } = getWeekNumber(etTime);
             const teams = generateFairTeams();
-            
+
             rosterReleased = true;
+            // Lock signup when roster releases - schedule will control when it unlocks
             requirePlayerCode = true;
-            manualOverride = true;  // Keep locked after auto-release
-            manualOverrideState = 'locked';  // Force locked state
-            
+            // Don't set manualOverride - let the schedule control unlocking
+            manualOverride = false;
+            manualOverrideState = null;
+
             currentWeekData = {
                 weekNumber: week,
                 year: year,
@@ -455,14 +446,14 @@ async function autoReleaseRoster() {
                 whiteTeam: teams.whiteTeam,
                 darkTeam: teams.darkTeam
             };
-            
+
             for (const player of players) {
                 await pool.query('UPDATE players SET team = $1 WHERE id = $2', [player.team, player.id]);
             }
-            
+
             await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
             await saveData();
-            
+
         } catch (error) {
             console.error('Auto-release error:', error);
         }
@@ -599,6 +590,7 @@ const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 30000 : 5000;
 
 setInterval(async () => {
     checkAutoLock();
+    await autoReleaseRoster();
     await checkWeeklyReset();
     await saveData();
 }, CHECK_INTERVAL);
@@ -1161,6 +1153,107 @@ app.get('/', (req, res) => {
     return sendPublic(res, 'index.html');
 });
 
+function parseDatetimeLocalToETDate(dtLocalStr) {
+    if (!dtLocalStr || typeof dtLocalStr !== 'string' || !dtLocalStr.includes('T')) return null;
+    const [dPart, tPart] = dtLocalStr.split('T');
+    const [y, m, d] = dPart.split('-').map(v => clampInt(v, NaN));
+    const [hh, mm] = tPart.split(':').map(v => clampInt(v, NaN));
+    if (![y, m, d, hh, mm].every(Number.isFinite)) return null;
+    // Treat admin-entered datetime-local as ET wall clock.
+    return new Date(y, (m - 1), d, hh, mm, 0, 0);
+}
+
+function formatETDateTimeLong(date) {
+    if (!date) return null;
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).format(date) + ' ET';
+}
+
+function formatETWallClockFromDatetimeLocal(dtLocalStr) {
+    const d = parseDatetimeLocalToETDate(dtLocalStr);
+    return d ? formatETDateTimeLong(d) : null;
+}
+
+function getNextScheduleOccurrence(schedulePoint) {
+    if (!schedulePoint) return null;
+    const etNow = getCurrentETTime();
+    const currentDow = etNow.getDay();
+    let daysAhead = (schedulePoint.dow - currentDow + 7) % 7;
+
+    const passedToday = daysAhead === 0 && (
+        etNow.getHours() > schedulePoint.hour ||
+        (etNow.getHours() === schedulePoint.hour && etNow.getMinutes() >= schedulePoint.minute)
+    );
+    if (passedToday) daysAhead = 7;
+
+    const next = new Date(etNow);
+    next.setDate(etNow.getDate() + daysAhead);
+    next.setHours(schedulePoint.hour, schedulePoint.minute, 0, 0);
+    return next;
+}
+
+function getSignupOpenMessageData() {
+    const gameDayName = getGameDayName();
+
+    // Calculate next unlock time from the schedule (not from saved timestamps)
+    let nextOpenAt = null;
+    let openLabel = null;
+
+    if (signupLockSchedule && signupLockSchedule.enabled && signupLockSchedule.end) {
+        nextOpenAt = getNextScheduleOccurrence(signupLockSchedule.end);
+        if (nextOpenAt) {
+            openLabel = formatETDateTimeLong(nextOpenAt);
+        }
+    }
+
+    // Fallback to exact timestamps if schedule not available
+    if (!openLabel) {
+        const exactOpenLabel = formatETWallClockFromDatetimeLocal(signupLockEndAt);
+        if (exactOpenLabel) {
+            openLabel = exactOpenLabel;
+        }
+    }
+
+    // Final fallback
+    if (!openLabel) {
+        openLabel = `${gameDayName} at 6:00 PM ET`;
+    }
+
+    // Calculate roster release time
+    const exactRosterLabel = formatETWallClockFromDatetimeLocal(rosterReleaseAt);
+    const exactRosterAt = parseDatetimeLocalToETDate(rosterReleaseAt);
+    const nextRosterAt = getNextScheduleOccurrence(rosterReleaseSchedule && rosterReleaseSchedule.at ? rosterReleaseSchedule.at : null);
+    const rosterLabel = exactRosterLabel || (nextRosterAt ? formatETDateTimeLong(nextRosterAt) : null);
+
+    return {
+        gameDayName,
+        nextOpenAtIso: nextOpenAt ? nextOpenAt.toISOString() : (exactRosterAt ? exactRosterAt.toISOString() : null),
+        nextOpenAtLabel: openLabel,
+        lockNoticeLine: '',
+        openLine: openLabel
+            ? `✅ Signup opens to all players on ${openLabel}`
+            : '✅ Signup opens to all players at the scheduled unlock time',
+        noCodeLine: 'No code required after signup opens to all players.',
+        rosterReleaseAtIso: exactRosterAt ? exactRosterAt.toISOString() : (nextRosterAt ? nextRosterAt.toISOString() : null),
+        rosterReleaseLabel: rosterLabel,
+        rosterReleaseHeadline: rosterLabel
+            ? `📅 Check Back ${rosterLabel}`
+            : `📅 Check Back ${gameDayName} at 5:00 PM ET`,
+        rosterReleaseLine: rosterLabel
+            ? `Team rosters are released on ${rosterLabel}.`
+            : `Team rosters are released every ${gameDayName} at 5:00 PM ET.`
+    };
+}
+
+// ============================================
 // ============================================
 // MODIFIED PUBLIC API - ADD MAINTENANCE MODE & CUSTOM TITLE
 // ============================================
@@ -1168,8 +1261,8 @@ app.get('/api/status', (req, res) => {
     const lockStatus = checkAutoLock();
     const etTime = getCurrentETTime();
     const { week, year } = getWeekNumber(etTime);
+    const signupMessageData = getSignupOpenMessageData();
     
-    const playerCount = getPlayerCount();
     const goalieCount = getGoalieCount();
     
     // STRIP all sensitive data from public players list
@@ -1193,6 +1286,7 @@ app.get('/api/status', (req, res) => {
         isFull: playerSpots === 0,
         waitlistCount: waitlist.length,
         requireCode: requirePlayerCode,
+        signupLocked: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: lockStatus.manualOverride,
         manualOverrideState: lockStatus.manualOverrideState,
@@ -1206,11 +1300,20 @@ app.get('/api/status', (req, res) => {
         currentYear: year,
         rules: GAME_RULES,
         players: publicPlayers,  // Sanitized - no ratings, no payment info
-        // NEW FIELDS - ADD THESE
         maintenanceMode: maintenanceMode,
         customTitle: customTitle,
         arenaOptions: ARENA_OPTIONS,
-        dayTimeOptions: DAY_TIME_OPTIONS
+        dayTimeOptions: DAY_TIME_OPTIONS,
+        gameDayName: signupMessageData.gameDayName,
+        nextOpenAt: signupMessageData.nextOpenAtIso,
+        nextOpenAtLabel: signupMessageData.nextOpenAtLabel,
+        lockNoticeLine: signupMessageData.lockNoticeLine,
+        openLine: signupMessageData.openLine,
+        noCodeLine: signupMessageData.noCodeLine,
+        rosterReleaseAt: signupMessageData.rosterReleaseAtIso,
+        rosterReleaseLabel: signupMessageData.rosterReleaseLabel,
+        rosterReleaseHeadline: signupMessageData.rosterReleaseHeadline,
+        rosterReleaseLine: signupMessageData.rosterReleaseLine
     });
 });
 
@@ -2288,8 +2391,9 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         rosterReleased = true;
         requirePlayerCode = true;
-        manualOverride = true;  // Keep locked after manual release
-        manualOverrideState = 'locked';  // Force locked state
+        // Schedule controls locking/unlocking - no manual override needed
+            manualOverride = false;
+            manualOverrideState = null;  // Force locked state
         
         currentWeekData = {
             weekNumber: week,

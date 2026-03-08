@@ -1272,30 +1272,31 @@
                     document.getElementById('waitlistMode').style.display = 'none';
                 }
                 
-                codeRequired = data.requireCode;
-                
+                const effectiveLocked = !!(data.requireCode ?? data.signupLocked);
+                codeRequired = effectiveLocked;
+
                 const lockNotice = document.getElementById('lockNotice');
-                
-                if (isLockedWindow || (codeRequired && !data.rosterReleased)) {
+                if (effectiveLocked && !data.rosterReleased) {
                     lockNotice.style.display = 'block';
-                    // Dynamic lock window text (based on selected game day)
-                    if (data.lockNoticeLine && data.openLine && data.noCodeLine) {
-                        lockNotice.innerHTML = `
-                            <strong>🔒 Signup Temporarily Locked</strong>
-                            ${data.lockNoticeLine}
-                            <span class="open-time">${data.openLine}</span>
-                            <span class="no-code-note">${data.noCodeLine}</span>
-                        `;
-                    }
+                    lockNotice.innerHTML = `
+                        <strong>🔒 Signup Temporarily Locked</strong>
+                        <span class="open-time">${data.openLine || '✅ Signup opens to all players at the scheduled unlock time'}</span>
+                        <span class="no-code-note">${data.noCodeLine || 'No code required after signup opens to all players.'}</span>
+                    `;
                 } else {
                     lockNotice.style.display = 'none';
                 }
 
-                await loadRegisteredPlayers();
+                if (data.rosterReleased) {
+                    document.getElementById('registeredPlayersSection').style.display = 'none';
+                } else {
+                    document.getElementById('registeredPlayersSection').style.display = 'block';
+                    await loadRegisteredPlayers();
+                }
 
                 
                 const codeTitle = document.getElementById('codeTitle');
-                if (codeRequired) {
+                if (effectiveLocked) {
                     document.getElementById('codeEntryBox').style.display = 'block';
                     document.getElementById('openNotice').style.display = 'none';
                     if (!verifiedCode) {

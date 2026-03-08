@@ -300,8 +300,7 @@
                 const detailEl = document.getElementById('checkBackDetail');
 
                 if (status.rosterReleaseLine) {
-                    const day = status.gameDayName || 'game day';
-                    if (strongEl) strongEl.textContent = `📅 Check Back ${day} at 5:00 PM ET`;
+                    if (strongEl) strongEl.textContent = status.rosterReleaseHeadline || '📅 Check Back';
                     if (detailEl) detailEl.textContent = status.rosterReleaseLine;
                 }
             } catch (e) {
