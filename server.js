@@ -40,9 +40,11 @@ if (pool) {
 }
 
 // Middleware
+app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.static('public', { maxAge: '1h', etag: true }));
 
 // --- DATA STORE ---
 let playerSpots = 20;
@@ -273,6 +275,9 @@ const DAY_TIME_OPTIONS = [
 // --- APP SETTINGS ---
 let maintenanceMode = false;
 let customTitle = `Phan's ${getGameDayName()} Hockey`;
+let announcementEnabled = false;
+let announcementText = '';
+let announcementImages = [];
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -478,6 +483,10 @@ async function autoReleaseRoster() {
         manualOverride = true;
         manualOverrideState = 'locked';
 
+        // Auto-enable payment reminder when roster is released
+        announcementEnabled = true;
+        announcementText = 'E-transfer required immediately after roster release.';
+
         currentWeekData = {
             weekNumber: week,
             year: year,
@@ -495,6 +504,15 @@ async function autoReleaseRoster() {
 
         if (pool) {
             await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
+
+            await pool.query(
+                'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                ['announcementEnabled', announcementEnabled.toString()]
+            );
+            await pool.query(
+                'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                ['announcementText', announcementText]
+            );
         }
         await saveData();
         return true;
@@ -852,6 +870,16 @@ async function loadDataFromDB() {
         if (appSettings.customTitle) customTitle = appSettings.customTitle;
         if (appSettings.selectedDayTime) gameTime = appSettings.selectedDayTime;
         if (appSettings.selectedArena) gameLocation = appSettings.selectedArena;
+        if (appSettings.announcementEnabled !== undefined) announcementEnabled = appSettings.announcementEnabled === 'true';
+        if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
+        if (appSettings.announcementImages !== undefined) {
+            try {
+                announcementImages = JSON.parse(appSettings.announcementImages || '[]');
+                if (!Array.isArray(announcementImages)) announcementImages = [];
+            } catch {
+                announcementImages = [];
+            }
+        }
         
     } catch (err) {
         console.error('Error loading from DB:', err);
@@ -939,6 +967,9 @@ function loadDataFromFile() {
             // Load new settings
             maintenanceMode = data.maintenanceMode ?? false;
             customTitle = data.customTitle ?? `Phan's ${getGameDayName()} Hockey`;
+            announcementEnabled = data.announcementEnabled ?? false;
+            announcementText = data.announcementText ?? '';
+            announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
@@ -1372,6 +1403,9 @@ app.get('/api/status', (req, res) => {
         // NEW FIELDS - ADD THESE
         maintenanceMode: maintenanceMode,
         customTitle: customTitle,
+        announcementEnabled: announcementEnabled,
+        announcementText: announcementText,
+        announcementImages: announcementImages,
         arenaOptions: ARENA_OPTIONS,
         dayTimeOptions: DAY_TIME_OPTIONS,
         gameDayName: signupMessageData.gameDayName,
@@ -1385,11 +1419,15 @@ app.get('/api/status', (req, res) => {
 });
 
 app.get('/api/waitlist', (req, res) => {
-    // Sanitized waitlist - no ratings, no phone numbers
+    // Waitlist view supports self-cancel, so include the id but keep private data hidden.
     const waitlistNames = waitlist.map((p, index) => ({
+        id: p.id,
         position: index + 1,
+        firstName: p.firstName,
+        lastName: p.lastName,
         fullName: `${p.firstName} ${p.lastName}`,
-        isGoalie: p.isGoalie
+        isGoalie: p.isGoalie,
+        canCancel: !rosterReleased && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
@@ -1399,7 +1437,8 @@ app.get('/api/waitlist', (req, res) => {
         location: gameLocation,
         time: gameTime,
         date: gameDate,
-        formattedDate: formatGameDate(gameDate)
+        formattedDate: formatGameDate(gameDate),
+        rosterReleased
     });
 });
 
@@ -1667,105 +1706,141 @@ app.post('/api/register-final', async (req, res) => {
     });
 });
 
-// CANCEL REGISTRATION ENDPOINT - MODIFIED TO PROTECT PHAN LY
+// CANCEL REGISTRATION / WAITLIST ENDPOINT
 app.post('/api/cancel-registration', async (req, res) => {
     const { playerId, phone } = req.body;
-    
-    if (!playerId || !phone) {
+
+    if (playerId === undefined || playerId === null || !phone) {
         return res.status(400).json({ error: "Player ID and phone number are required." });
     }
-    
-    const idToRemove = parseInt(playerId);
-    if (isNaN(idToRemove)) {
+
+    const idToRemove = String(playerId).trim();
+    if (!idToRemove) {
         return res.status(400).json({ error: "Invalid player ID." });
     }
-    
-    const playerIndex = players.findIndex(p => String(p.id) === String(idToRemove));
-    
-    if (playerIndex === -1) {
-        return res.status(404).json({ error: "Player not found." });
-    }
-    
-    const player = players[playerIndex];
-    
-    // PROTECT PHAN LY - CANNOT CANCEL FROM SIGNUP PAGE
-    if (player.firstName.toLowerCase() === 'phan' && player.lastName.toLowerCase() === 'ly') {
-        return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
-    }
-    
-    const submittedPhone = normalizePhoneDigits(phone);
-    const storedPhone = normalizePhoneDigits(player.phone);
-    
-    if (submittedPhone !== storedPhone) {
-        return res.status(401).json({ error: "Phone number does not match registration." });
-    }
-    
-    if (player.isGoalie) {
-        return res.status(403).json({ error: "Goalies cannot cancel online. Please contact admin." });
-    }
-    
+
     if (rosterReleased) {
         return res.status(403).json({ error: "Cannot cancel after roster has been released." });
     }
-    
-    try {
-        if (pool) {
-            await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
-        }
-    } catch (err) {
-        console.error('Error removing from database:', err);
+
+    const submittedPhone = normalizePhoneDigits(phone);
+    if (!submittedPhone) {
+        return res.status(400).json({ error: "Phone number is required." });
     }
-    
-    players.splice(playerIndex, 1);
-    playerSpots++;
-    
-    let promotedPlayer = null;
-    
-    if (waitlist.length > 0) {
-        const waitlistPlayer = waitlist.shift();
-        
-        promotedPlayer = {
-            id: waitlistPlayer.id,
-            firstName: waitlistPlayer.firstName,
-            lastName: waitlistPlayer.lastName,
-            phone: waitlistPlayer.phone,
-            paymentMethod: waitlistPlayer.paymentMethod,
-            paid: false,
-            paidAmount: null,
-            rating: parseInt(waitlistPlayer.rating) || 5,
-            isGoalie: waitlistPlayer.isGoalie,
-            team: null,
-            registeredAt: new Date().toISOString(),
-            rulesAgreed: true
-        };
-        
-        players.push(promotedPlayer);
-        playerSpots--;
-        
+
+    const isProtectedPlayer = (p) =>
+        String(p?.firstName || '').toLowerCase() === 'phan' &&
+        String(p?.lastName || '').toLowerCase() === 'ly';
+
+    const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
+
+    const playerIndex = findById(players);
+    if (playerIndex !== -1) {
+        const player = players[playerIndex];
+
+        if (isProtectedPlayer(player)) {
+            return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+        }
+
+        const storedPhone = normalizePhoneDigits(player.phone);
+        if (submittedPhone !== storedPhone) {
+            return res.status(401).json({ error: "Phone number does not match registration." });
+        }
+
         try {
-            await pool.query('DELETE FROM waitlist WHERE id = $1', [waitlistPlayer.id]);
-            await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [promotedPlayer.id, promotedPlayer.firstName, promotedPlayer.lastName, promotedPlayer.phone,
-                 promotedPlayer.paymentMethod, promotedPlayer.paid, promotedPlayer.paidAmount, promotedPlayer.rating, promotedPlayer.isGoalie, null, true]
-            );
+            if (pool) {
+                await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
+            }
         } catch (err) {
-            console.error('Error promoting waitlist player:', err);
+            console.error('Error removing from players database:', err);
         }
+
+        players.splice(playerIndex, 1);
+        playerSpots++;
+
+        let promotedPlayer = null;
+
+        if (waitlist.length > 0) {
+            const waitlistPlayer = waitlist.shift();
+
+            promotedPlayer = {
+                id: waitlistPlayer.id,
+                firstName: waitlistPlayer.firstName,
+                lastName: waitlistPlayer.lastName,
+                phone: waitlistPlayer.phone,
+                paymentMethod: waitlistPlayer.paymentMethod,
+                paid: false,
+                paidAmount: null,
+                rating: parseInt(waitlistPlayer.rating) || 5,
+                isGoalie: waitlistPlayer.isGoalie,
+                team: null,
+                registeredAt: new Date().toISOString(),
+                rulesAgreed: true
+            };
+
+            players.push(promotedPlayer);
+            playerSpots--;
+
+            try {
+                if (pool) {
+                    await pool.query('DELETE FROM waitlist WHERE id = $1', [waitlistPlayer.id]);
+                    await pool.query(
+                        `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                        [promotedPlayer.id, promotedPlayer.firstName, promotedPlayer.lastName, promotedPlayer.phone,
+                         promotedPlayer.paymentMethod, promotedPlayer.paid, promotedPlayer.paidAmount, promotedPlayer.rating, promotedPlayer.isGoalie, null, true]
+                    );
+                }
+            } catch (err) {
+                console.error('Error promoting waitlist player:', err);
+            }
+        }
+
+        await saveData();
+
+        return res.json({
+            success: true,
+            message: "Registration cancelled successfully.",
+            promotedPlayer: promotedPlayer ? {
+                firstName: promotedPlayer.firstName,
+                lastName: promotedPlayer.lastName
+            } : null,
+            spotsAvailable: playerSpots
+        });
     }
-    
-    await saveData();
-    
-    res.json({
-        success: true,
-        message: "Registration cancelled successfully.",
-        promotedPlayer: promotedPlayer ? {
-            firstName: promotedPlayer.firstName,
-            lastName: promotedPlayer.lastName
-        } : null,
-        spotsAvailable: playerSpots
-    });
+
+    const waitlistIndex = findById(waitlist);
+    if (waitlistIndex !== -1) {
+        const waitlistPlayer = waitlist[waitlistIndex];
+
+        if (isProtectedPlayer(waitlistPlayer)) {
+            return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+        }
+
+        const storedPhone = normalizePhoneDigits(waitlistPlayer.phone);
+        if (submittedPhone !== storedPhone) {
+            return res.status(401).json({ error: "Phone number does not match registration." });
+        }
+
+        try {
+            if (pool) {
+                await pool.query('DELETE FROM waitlist WHERE id = $1', [waitlistPlayer.id]);
+            }
+        } catch (err) {
+            console.error('Error removing from waitlist database:', err);
+        }
+
+        waitlist.splice(waitlistIndex, 1);
+        await saveData();
+
+        return res.json({
+            success: true,
+            message: "Waitlist registration cancelled successfully.",
+            fromWaitlist: true
+        });
+    }
+
+    return res.status(404).json({ error: "Player not found." });
 });
 
 // --- ADMIN API - FULL ACCESS TO ALL DATA ---
@@ -1804,6 +1879,9 @@ app.post('/api/admin/app-settings', (req, res) => {
     res.json({
         maintenanceMode,
         customTitle,
+        announcementEnabled,
+        announcementText,
+        announcementImages,
         selectedDayTime: gameTime,
         selectedArena: gameLocation,
         gameDate,
@@ -1816,14 +1894,22 @@ app.post('/api/admin/app-settings', (req, res) => {
 // Update app settings
 app.post('/api/admin/update-app-settings', async (req, res) => {
     const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle, 
+            announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
     
     if (!adminSessions[sessionToken]) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
-    if (newMaintenance !== undefined) maintenanceMode = newMaintenance;
+    if (newMaintenance !== undefined) maintenanceMode = !!newMaintenance;
     if (newTitle) customTitle = newTitle;
+    if (newAnnouncementEnabled !== undefined) announcementEnabled = !!newAnnouncementEnabled;
+    if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
+    if (newAnnouncementImages !== undefined) {
+        announcementImages = Array.isArray(newAnnouncementImages)
+            ? newAnnouncementImages.map(v => String(v || '').trim()).filter(Boolean).slice(0, 6)
+            : [];
+    }
     if (selectedDayTime) gameTime = selectedDayTime;
     if (selectedArena) gameLocation = selectedArena;
     if (newGameDate) gameDate = newGameDate;
@@ -1837,6 +1923,18 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         await pool.query(
             'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
             ['customTitle', customTitle]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementEnabled', announcementEnabled.toString()]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementText', announcementText]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementImages', JSON.stringify(announcementImages)]
         );
         await pool.query(
             'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
@@ -1855,6 +1953,9 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             success: true,
             maintenanceMode,
             customTitle,
+            announcementEnabled,
+            announcementText,
+            announcementImages,
             gameTime,
             gameLocation,
             gameDate
@@ -2467,6 +2568,10 @@ app.post('/api/admin/release-roster', async (req, res) => {
         requirePlayerCode = true;
         manualOverride = true;  // Keep locked after manual release
         manualOverrideState = 'locked';  // Force locked state
+
+        // Auto-enable payment reminder when roster is released
+        announcementEnabled = true;
+        announcementText = 'E-transfer required immediately after roster release.';
         
         currentWeekData = {
             weekNumber: week,
@@ -2482,6 +2587,16 @@ app.post('/api/admin/release-roster', async (req, res) => {
         }
         
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
+
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementEnabled', announcementEnabled.toString()]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementText', announcementText]
+        );
+
         await saveData();
         
         res.json({ 
