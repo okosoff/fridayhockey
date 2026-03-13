@@ -759,18 +759,12 @@
             background: rgba(255,255,255,0.55);
             flex: 0 0 auto;
             display: none;
-            cursor: zoom-in;
-            transition: transform 0.18s ease, box-shadow 0.18s ease;
         }
 
         .announcement-thumb.visible {
             display: block;
         }
 
-        .announcement-thumb.visible:hover {
-            transform: scale(1.03);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-        }
 
         .announcement-copy strong {
             display: block;
@@ -787,55 +781,6 @@
         }
 
 
-        .announcement-modal {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.88);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            z-index: 9999;
-        }
-
-        .announcement-modal.active {
-            display: flex;
-        }
-
-        .announcement-modal-image {
-            max-width: min(96vw, 1400px);
-            max-height: 90vh;
-            width: auto;
-            height: auto;
-            border-radius: 12px;
-            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
-            background: #fff;
-        }
-
-        .announcement-modal-close {
-            position: absolute;
-            top: 18px;
-            right: 22px;
-            width: 44px;
-            height: 44px;
-            border: none;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.16);
-            color: #fff;
-            font-size: 1.8rem;
-            line-height: 1;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            padding: 0;
-        }
-
-        .announcement-modal-close:hover {
-            background: rgba(255,255,255,0.24);
-        }
-
         @media (max-width: 640px) {
             .announcement-bulletin.active {
                 align-items: flex-start;
@@ -844,10 +789,6 @@
             .announcement-thumb {
                 width: 96px;
                 height: 96px;
-            }
-
-            .announcement-modal {
-                padding: 16px;
             }
         }
 
@@ -862,19 +803,13 @@
     </div>
 
     <div class="announcement-bulletin" id="announcementBulletin">
-        <img id="announcementThumb" class="announcement-thumb" alt="Announcement" role="button" tabindex="0" aria-label="Open announcement image">
+        <img id="announcementThumb" class="announcement-thumb" alt="Announcement">
         <div class="announcement-copy">
-            <strong>Attention (click on pic to enlarge):</strong>
+            <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
         </div>
     </div>
 
-
-
-    <div class="announcement-modal" id="announcementModal" aria-hidden="true">
-        <button type="button" class="announcement-modal-close" id="announcementModalClose" aria-label="Close image viewer">&times;</button>
-        <img id="announcementModalImage" class="announcement-modal-image" alt="Announcement full size">
-    </div>
 
     <div class="container" id="playerView">
         <h1 id="pageTitle">Phan's Hockey</h1>
@@ -942,9 +877,8 @@
 
             <div class="roster-notice" id="rosterNotice">
                 <h3>📋 Team Roster</h3>
-                <p>Teams are auto-generated based on players self rating</p>
-                <a href="/roster" class="roster-link">View Full Roster Page →</a><br>
-                <a href="/history" class="roster-link" style="font-size: 0.9rem; margin-top: 5px;">View Past Weeks →</a>
+                <p>Teams are auto-generated based on players self rating and will appear here when released.</p>
+                <a href="/history" class="roster-link" style="font-size: 0.95rem; margin-top: 5px;">View Past Weeks →</a>
             </div>
 
             <div class="waitlist-mode" id="waitlistMode" style="display:none;">
@@ -1353,54 +1287,6 @@
         }
 
 
-
-
-        function openAnnouncementModal(src) {
-            const modal = document.getElementById('announcementModal');
-            const modalImage = document.getElementById('announcementModalImage');
-            if (!modal || !modalImage || !src) return;
-            modalImage.src = src;
-            modal.classList.add('active');
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeAnnouncementModal() {
-            const modal = document.getElementById('announcementModal');
-            const modalImage = document.getElementById('announcementModalImage');
-            if (!modal || !modalImage) return;
-            modal.classList.remove('active');
-            modal.setAttribute('aria-hidden', 'true');
-            modalImage.src = '';
-            document.body.style.overflow = '';
-        }
-
-        document.addEventListener('click', (event) => {
-            const thumb = document.getElementById('announcementThumb');
-            const modal = document.getElementById('announcementModal');
-            const closeBtn = document.getElementById('announcementModalClose');
-            if (thumb && event.target === thumb && thumb.src) {
-                openAnnouncementModal(thumb.src);
-                return;
-            }
-            if (modal && (event.target === modal || event.target === closeBtn)) {
-                closeAnnouncementModal();
-            }
-        });
-
-        document.addEventListener('keydown', (event) => {
-            const thumb = document.getElementById('announcementThumb');
-            const modal = document.getElementById('announcementModal');
-            if (event.key === 'Escape' && modal && modal.classList.contains('active')) {
-                closeAnnouncementModal();
-                return;
-            }
-            if (thumb && document.activeElement === thumb && (event.key === 'Enter' || event.key === ' ')) {
-                event.preventDefault();
-                if (thumb.src) openAnnouncementModal(thumb.src);
-            }
-        });
-
         function renderAnnouncement(data) {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
@@ -1461,16 +1347,6 @@
                 playerSpotsAvailable = data.playerSpotsRemaining;
                 isFull = data.isFull;
                 rosterReleased = data.rosterReleased;
-
-                // Auto-redirect to roster page when roster is newly released
-                if (data.rosterReleased && data.rosterReleaseTime) {
-                    const lastSeenRelease = sessionStorage.getItem('lastSeenRosterRelease');
-                    if (lastSeenRelease !== String(data.rosterReleaseTime)) {
-                        sessionStorage.setItem('lastSeenRosterRelease', data.rosterReleaseTime);
-                        window.location.href = '/roster';
-                        return;
-                    }
-                }
                 const isLockedWindow = data.isLockedWindow;
                 
                 currentPlayers = data.players || [];
@@ -1511,8 +1387,10 @@
 
                 if (data.rosterReleased) {
                     document.getElementById('registeredPlayersSection').style.display = 'none';
+                    document.getElementById('rosterNotice').style.display = 'none';
                 } else {
                     document.getElementById('registeredPlayersSection').style.display = 'block';
+                    document.getElementById('rosterNotice').style.display = 'block';
                     await loadRegisteredPlayers();
                 }
 
