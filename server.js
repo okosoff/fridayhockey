@@ -40,11 +40,9 @@ if (pool) {
 }
 
 // Middleware
-app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json({ limit: '15mb' }));
-app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-app.use(express.static('public', { maxAge: '1h', etag: true }));
+app.use(express.json());
+app.use(express.static('public'));
 
 // --- DATA STORE ---
 let playerSpots = 20;
@@ -1414,6 +1412,9 @@ app.get('/api/status', (req, res) => {
         lockNoticeLine: signupMessageData.lockNoticeLine,
         openLine: signupMessageData.openLine,
         noCodeLine: signupMessageData.noCodeLine,
+        rosterReleaseAt: signupMessageData.rosterReleaseAtIso,
+        rosterReleaseLabel: signupMessageData.rosterReleaseLabel,
+        rosterReleaseHeadline: signupMessageData.rosterReleaseHeadline,
         rosterReleaseLine: signupMessageData.rosterReleaseLine
     });
 });
