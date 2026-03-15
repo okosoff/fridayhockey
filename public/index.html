@@ -1431,6 +1431,17 @@
                 currentTime = data.time;
                 currentDate = data.formattedDate;
                 playerSpotsAvailable = data.playerSpotsRemaining;
+        if (data.openSpotsNotice) {
+            const notice=document.createElement('div');
+            notice.style.background='#ff6b00';
+            notice.style.padding='12px';
+            notice.style.marginBottom='15px';
+            notice.style.borderRadius='8px';
+            notice.style.fontWeight='bold';
+            notice.innerText=data.openSpotsNotice;
+            document.querySelector('.container').prepend(notice);
+        }
+
                 isFull = data.isFull;
                 rosterReleased = data.rosterReleased;
                 currentRosterReleaseAt = data.rosterReleaseAt || null;

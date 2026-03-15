@@ -1513,6 +1513,7 @@ app.get('/api/status', (req, res) => {
     
     res.json({
         playerSpotsRemaining: playerSpots > 0 ? playerSpots : 0,
+        openSpotsNotice: (rosterReleased && playerSpots > 0) ? 'Spots still available, message me direct 5195669288 if you want in.' : null,
         goalieCount: goalieCount,
         goalieSpotsAvailable: MAX_GOALIES - goalieCount,
         maxGoalies: MAX_GOALIES,
@@ -2729,7 +2730,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         res.json({ 
             success: true, 
-            message: "Roster released successfully. Signup is now LOCKED until Monday 6pm.",
+            message: "Roster released successfully.",
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam,
             whiteRating: teams.whiteRating.toFixed(1),
