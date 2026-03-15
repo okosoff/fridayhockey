@@ -2780,6 +2780,14 @@ app.get('/api/admin/export-payments', async (req, res) => {
 });
 
 // 404 handler - MUST be last
+app.get('/health', (req, res) => {
+    res.status(200).type('text/plain').send('OK');
+});
+
+app.head('/health', (req, res) => {
+    res.sendStatus(200);
+});
+
 app.use((req, res) => {
     res.status(404).json({ error: "Cannot GET " + req.path });
 });
