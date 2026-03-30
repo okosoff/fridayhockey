@@ -1,0 +1,2311 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phan's Hockey</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --input-bg: #3d3d3d;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* MAINTENANCE BULLETIN - FLASHING */
+        .maintenance-bulletin {
+            display: none;
+            background: linear-gradient(90deg, #ff4444, #ff6b00, #ff4444);
+            background-size: 200% 100%;
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.3rem;
+            animation: flash 1s infinite;
+            border: 3px solid #ff4444;
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.6);
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .maintenance-bulletin.active {
+            display: block;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .game-info {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .game-date {
+            font-size: 1.1rem;
+            color: #fff;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .game-location {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+
+        .game-time {
+            font-size: 1.1rem;
+            color: #ccc;
+        }
+
+        .spots-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .spot-counter {
+            background: linear-gradient(135deg, #333, #444);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid var(--accent);
+        }
+
+        .spot-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .spot-number.full {
+            color: #ff4444;
+        }
+
+        .spot-text { 
+            font-size: 0.9rem; 
+            color: #ccc; 
+            margin-top: 5px;
+        }
+
+        .full-badge {
+            background: #ff4444;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+        }
+
+        .waitlist-mode {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff6b00;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .waitlist-mode h3 {
+            color: #ff6b00;
+            margin: 0 0 10px 0;
+        }
+
+        .waitlist-mode p {
+            color: #ccc;
+            margin: 0;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: var(--input-bg);
+            border: 1px solid #555;
+            color: white;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover { background: #ff8533; }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+
+        .rating-mode-box {
+            background: linear-gradient(135deg, #222, #2d2d2d);
+            border: 1px solid #4a4a4a;
+            border-radius: 10px;
+            padding: 14px;
+            margin: 16px 0 12px;
+        }
+
+        .rating-mode-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .rating-mode-option {
+            background: rgba(0,0,0,0.22);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 12px;
+            cursor: pointer;
+        }
+
+        .rating-mode-option.active {
+            border-color: var(--accent);
+            background: rgba(255,107,0,0.10);
+        }
+
+        .rating-mode-option input {
+            display: none;
+        }
+
+        .direct-rating-box {
+            background: linear-gradient(135deg, #1c2a1c, #253525);
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .skill-profile-wrapper.hidden,
+        .direct-rating-box.hidden {
+            display: none;
+        }
+
+        .payment-options {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+
+        .payment-options > div {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .payment-options label {
+            display: block;
+            padding: 10px;
+            background: var(--input-bg);
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            width: 100%;
+            line-height: 1.4;
+        }
+
+        .payment-options input { 
+            display: none; 
+        }
+        
+        .payment-options input:checked + label {
+            border-color: var(--accent);
+            background: #4d4d4d;
+        }
+
+        .roster-notice {
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top left, rgba(84, 255, 119, 0.16), transparent 34%),
+                radial-gradient(circle at top right, rgba(86, 190, 255, 0.12), transparent 26%),
+                linear-gradient(90deg, #0f3f15 0%, #173d1b 34%, #1d4320 64%, #244a25 100%);
+            border: 2px solid rgba(90, 214, 99, 0.9);
+            border-radius: 18px;
+            padding: 24px 22px 22px;
+            margin: 22px 0;
+            text-align: center;
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .roster-notice::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
+            pointer-events: none;
+        }
+
+        .roster-notice::after {
+            content: '';
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            top: 0;
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(120,255,126,0), rgba(120,255,126,0.95), rgba(120,255,126,0));
+            pointer-events: none;
+        }
+
+        .roster-notice h3 {
+            position: relative;
+            z-index: 1;
+            color: #54d85a;
+            margin: 0;
+            font-size: clamp(1.15rem, 2.8vw, 1.9rem);
+            line-height: 1.25;
+            letter-spacing: 0.2px;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.15);
+        }
+
+        .roster-countdown {
+            position: relative;
+            z-index: 1;
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .roster-countdown-value {
+            font-size: clamp(2.2rem, 6vw, 3.25rem);
+            font-weight: 800;
+            color: #fff8ea;
+            letter-spacing: 1px;
+            text-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+        }
+
+        .roster-countdown-label {
+            font-size: 0.95rem;
+            color: #f4d48f;
+            letter-spacing: 0.25px;
+        }
+
+        .roster-countdown-placeholder {
+            position: relative;
+            z-index: 1;
+            margin-top: 4px;
+            font-size: 0.95rem;
+            color: #f4d48f;
+        }
+
+        .roster-link {
+            position: relative;
+            z-index: 1;
+            display: inline-block;
+            margin-top: 14px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 1.05rem;
+        }
+
+        .roster-link:hover {
+            text-decoration: underline;
+        }
+
+        .code-entry {
+            background: linear-gradient(135deg, #2a1a3a, #3d2d4d);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            padding: 25px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .code-entry h3 {
+            margin: 0 0 15px 0;
+            color: var(--accent);
+        }
+
+        .code-inputs {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
+        }
+
+        .code-digit {
+            width: 60px;
+            height: 70px;
+            font-size: 2rem;
+            text-align: center;
+            background: var(--input-bg);
+            border: 2px solid #555;
+            border-radius: 10px;
+            color: white;
+            margin: 0;
+        }
+
+        .code-digit:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .open-signup-notice {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            color: #4CAF50;
+        }
+
+        .view-waitlist-btn {
+            background: #ff6b00;
+            margin-top: 15px;
+        }
+
+        .view-roster-btn {
+            background: #4CAF50;
+            margin-top: 10px;
+        }
+
+        .rating-info {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: -5px;
+            margin-bottom: 10px;
+        }
+
+        /* Roster Display Section */
+        .roster-display-section {
+            background: linear-gradient(135deg, #1a2a1a, #2d3d2d);
+            border: 3px solid #4CAF50;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .roster-display-section.active {
+            display: block;
+            animation: slideDown 0.5s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .roster-header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #4CAF50;
+        }
+
+        .roster-header h2 {
+            color: #4CAF50;
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+        }
+
+        .roster-header p {
+            color: #aaa;
+            margin: 0;
+        }
+
+        .teams-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .team-box {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid;
+        }
+
+        .team-white {
+            border-color: #ffffff;
+        }
+
+        .team-dark {
+            border-color: #666666;
+        }
+
+        .team-header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #444;
+        }
+
+        .team-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .team-white .team-name {
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+
+        .team-dark .team-name {
+            color: #888888;
+        }
+
+        .team-rating {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .player-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .player-item {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 6px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 5px;
+            border-left: 3px solid transparent;
+        }
+
+        .player-item.goalie {
+            border-left-color: #ff6b00;
+            background: rgba(255, 107, 0, 0.1);
+        }
+
+        .player-name {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+        }
+
+        .goalie-badge {
+            background: #ff6b00;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: bold;
+        }
+
+        /* Lock schedule notice */
+        .lock-notice {
+            background: linear-gradient(135deg, #4a1a1a, #5d2d2d);
+            border: 3px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            color: #ffaaaa;
+            font-size: 1rem;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(255, 68, 68, 0.5); }
+        }
+
+        .lock-notice strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.3rem;
+            color: #ff4444;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .lock-notice .open-time {
+            color: #4CAF50;
+            font-weight: bold;
+            display: block;
+            margin-top: 12px;
+            font-size: 1.1rem;
+            background: rgba(76, 175, 80, 0.1);
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #4CAF50;
+        }
+
+        .lock-notice .no-code-note {
+            color: #888;
+            font-size: 0.9rem;
+            display: block;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .spot-number { font-size: 2.5rem; }
+            .code-digit { width: 50px; height: 60px; font-size: 1.5rem; }
+            .spots-container { grid-template-columns: 1fr; }
+            .teams-container { grid-template-columns: 1fr; }
+            .payment-options > div {
+                flex: 1 1 100%;
+            }
+            .lock-notice { font-size: 0.9rem; padding: 15px; }
+            .lock-notice strong { font-size: 1.1rem; }
+        }
+    
+        /* Registered Players Section */
+        .registered-players-section {
+            background: linear-gradient(135deg, #1a2a1a, #2d3d2d);
+            border: 2px solid #4CAF50;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .player-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-left: 3px solid var(--accent);
+            position: relative;
+            min-width: 0;
+        }
+
+        .player-card.goalie-card {
+            border-left-color: #ff6b00;
+            background: rgba(255, 107, 0, 0.1);
+        }
+
+        .player-card.protected-card {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .player-avatar {
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1rem;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .player-card.goalie-card .player-avatar {
+            background: #ff6b00;
+        }
+
+        .player-card.protected-card .player-avatar {
+            background: #4CAF50;
+        }
+
+        .player-info-simple {
+            flex: 1;
+            min-width: 0;
+            overflow: visible;
+        }
+
+        .player-name-simple {
+            font-weight: 500;
+            font-size: 0.95rem;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            line-height: 1.25;
+            word-break: break-word;
+        }
+
+        .goalie-label {
+            color: #ff6b00;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .protected-label {
+            color: #4CAF50;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        /* COMPACT CANCEL BUTTON */
+        .cancel-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            cursor: pointer;
+            flex-shrink: 0;
+            white-space: nowrap;
+            line-height: 1;
+            min-width: auto;
+            width: auto;
+            margin: 0;
+        }
+
+        .cancel-btn:hover {
+            background: #ff6666;
+        }
+
+        /* Cancel Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 2px solid #ff4444;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            color: #ff4444;
+            margin: 0 0 15px 0;
+        }
+
+        .modal-content p {
+            color: #ccc;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            margin: 0;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        .modal-buttons .confirm-cancel {
+            background: #ff4444;
+        }
+
+        .modal-buttons .confirm-cancel:hover {
+            background: #ff6666;
+        }
+
+        .modal-buttons .abort-btn {
+            background: #555;
+        }
+
+        .modal-buttons .abort-btn:hover {
+            background: #666;
+        }
+
+        .cancel-error {
+            color: #ff4444;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .cancel-success {
+            color: #4CAF50;
+            font-size: 0.9rem;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 5px;
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .players-grid {
+                grid-template-columns: 1fr;
+            }
+            .player-card {
+                padding: 8px 10px;
+            }
+            .player-avatar {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+            .player-name-simple {
+                font-size: 0.85rem;
+            }
+            .cancel-btn {
+                padding: 3px 6px;
+                font-size: 0.65rem;
+            }
+        }
+
+
+        .open-spots-notice {
+            display: none;
+            width: 100%;
+            background: linear-gradient(135deg, #ff6b00, #ff8c33);
+            color: #fff;
+            padding: 16px 18px;
+            border-radius: 12px;
+            margin: 18px 0;
+            font-weight: 700;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(255, 107, 0, 0.25);
+        }
+
+        .open-spots-notice.active {
+            display: block;
+        }
+
+        .announcement-bulletin {
+            display: none;
+            width: 100%;
+            max-width: 900px;
+            background: linear-gradient(180deg, #fff7db 0%, #ffe8a3 100%);
+            color: #2f2410;
+            padding: 14px 16px;
+            border-radius: 12px;
+            margin-bottom: 22px;
+            border: 1px solid #e2be57;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+        }
+
+        .announcement-bulletin.active {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .announcement-thumb {
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.55);
+            flex: 0 0 auto;
+            display: none;
+        }
+
+        .announcement-thumb.visible {
+            display: block;
+        }
+
+        .announcement-copy strong {
+            display: block;
+            font-size: 1.05rem;
+            margin-bottom: 2px;
+            letter-spacing: 0.2px;
+            color: #5a4306;
+        }
+
+        .announcement-copy span {
+            color: #2f2410;
+            font-size: 1rem;
+            line-height: 1.4;
+        }
+
+    
+        .rating-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .rating-card {
+            background: #252525;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .rating-card label, .profile-field label {
+            display:block;
+            color:#ddd;
+            font-size:0.9rem;
+            margin-bottom:6px;
+        }
+        .profile-field { margin-top: 12px; }
+        .rating-summary-box {
+            background: linear-gradient(135deg, #1f2f1f, #264026);
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+        .rating-summary-box .small-note {
+            color:#b8d8b8;
+            font-size:0.82rem;
+            margin-top:6px;
+        }
+
+</style>
+<base target="_blank">
+</head>
+<body>
+
+    <!-- MAINTENANCE BULLETIN -->
+    <div class="maintenance-bulletin" id="maintenanceBulletin">
+        Portal is down for maintenance, check back later
+    </div>
+
+    <div class="announcement-bulletin" id="announcementBulletin">
+        <img id="announcementThumb" class="announcement-thumb" alt="Announcement">
+        <div class="announcement-copy">
+            <strong>Attention:</strong>
+            <span id="announcementText">&nbsp;</span>
+        </div>
+    </div>
+
+    <div class="container" id="playerView">
+        <h1 id="pageTitle">Phan's Hockey</h1>
+        
+        <div class="game-info">
+            <div class="game-date" id="gameDate">Loading...</div>
+            <div class="game-location" id="gameLocation">Loading...</div>
+            <div class="game-time" id="gameTime">Loading...</div>
+        </div>
+
+        <div class="open-spots-notice" id="openSpotsNotice"></div>
+
+
+        <!-- Roster Display Section -->
+        <div class="roster-display-section" id="rosterDisplay">
+            <div class="roster-header">
+                <h2>🏒 Team Roster Released!</h2>
+                <p id="rosterGameInfo">--</p>
+            </div>
+            <div class="teams-container">
+                <div class="team-box team-white">
+                    <div class="team-header">
+                        <div class="team-name">Team White</div>
+                        <div class="team-rating"><span id="whiteCount">0</span> players</div>
+                    </div>
+                    <ul class="player-list" id="whiteTeamList"></ul>
+                </div>
+                <div class="team-box team-dark">
+                    <div class="team-header">
+                        <div class="team-name">Team Dark</div>
+                        <div class="team-rating"><span id="darkCount">0</span> players</div>
+                    </div>
+                    <ul class="player-list" id="darkTeamList"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registered Players List -->
+        <div class="registered-players-section" id="registeredPlayersSection">
+            <h3 style="text-align: center; color: var(--accent); margin: 20px 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
+                🏒 Registered Players (<span id="registeredCount">0</span>)
+            </h3>
+            <div class="players-grid" id="playersGrid">
+                <!-- Players will be loaded here -->
+            </div>
+        </div>
+
+        <div id="registrationArea">
+            <div class="spots-container">
+                <div class="spot-counter" id="playerSpotCounter">
+                    <div class="spot-number" id="spotsLeft">--</div>
+                    <div class="spot-text" id="spotsText">Player Spots Available</div>
+                </div>
+            </div>
+
+            <!-- Lock Schedule Notice -->
+            <div class="lock-notice" id="lockNotice" style="display:none;">
+                <strong>🔒 Signup Temporarily Locked</strong>
+                Signup is locked during the scheduled lock window
+                <span class="open-time">
+                    ✅ Signup opens to all players at the scheduled unlock time
+                </span>
+                <span class="no-code-note">
+                    (No code required after the scheduled unlock time)
+                </span>
+            </div>
+
+            <div class="roster-notice" id="rosterNotice">
+                <h3 id="rosterNoticeHeadline">📅 Check Back Sunday • Roster Release 5:00 PM ET</h3>
+                <div class="roster-countdown" id="rosterCountdown" style="display:none;">
+                    <div class="roster-countdown-value" id="rosterCountdownValue">--:--:--</div>
+                    <div class="roster-countdown-label" id="rosterCountdownLabel">until roster release</div>
+                </div>
+                <div class="roster-countdown-placeholder" id="rosterCountdownPlaceholder" style="display:none;">Countdown will appear once a roster release time is scheduled.</div>
+                <div class="roster-meta" id="rosterMeta">Roster release time to be announced</div>
+                <a href="/history" class="roster-link" style="font-size: 0.9rem; margin-top: 5px;">View Past Weeks →</a>
+            </div>
+
+            <div class="waitlist-mode" id="waitlistMode" style="display:none;">
+                <h3>🏒 PLAYER SPOTS FULL - JOIN WAITLIST</h3>
+                <p>Enter your info below to join the waitlist.</p>
+            </div>
+
+            <div id="codeSection">
+                <div class="code-entry" id="codeEntryBox">
+                    <h3 id="codeTitle">🔒 Enter 4-Digit Code to Sign Up</h3>
+                    <div class="code-inputs">
+                        <input type="text" class="code-digit" maxlength="1" id="code1" onkeyup="moveToNext(this, 'code2')" oninput="validateDigit(this)">
+                        <input type="text" class="code-digit" maxlength="1" id="code2" onkeyup="moveToNext(this, 'code3')" oninput="validateDigit(this)">
+                        <input type="text" class="code-digit" maxlength="1" id="code3" onkeyup="moveToNext(this, 'code4')" oninput="validateDigit(this)">
+                        <input type="text" class="code-digit" maxlength="1" id="code4" onkeyup="checkCodeEnter(event)" oninput="validateDigit(this)">
+                    </div>
+                    <button onclick="verifyCode()">Continue</button>
+                    <p id="codeError" style="color:#ff4444; display:none; margin-top:10px;">Invalid code</p>
+                </div>
+
+                <div class="open-signup-notice" id="openNotice" style="display:none;">
+                    <h3>✅ Signup is Open!</h3>
+                    <p>No code required - register below</p>
+                </div>
+            </div>
+
+            <form id="signupForm" style="display:none;">
+                <input type="text" id="firstName" placeholder="First Name" required>
+                <input type="text" id="lastName" placeholder="Last Name" required>
+                <input type="tel" id="phone" placeholder="Phone Number (e.g., 519-123-4567)" required>
+                
+                <div class="rating-mode-box">
+                    <div style="color:#dcdcdc; font-weight:600;">Choose how you want to enter your skill rating</div>
+                    <div style="color:#aaa; font-size:0.9rem; margin-top:4px;">Use the balanced profile for the fairest team matching, or bypass it if you already know your number.</div>
+                    <div class="rating-mode-options">
+                        <label class="rating-mode-option active" id="ratingModeProfileCard">
+                            <input type="radio" name="ratingMode" id="ratingModeProfile" value="profile" checked>
+                            <strong style="display:block; margin-bottom:4px; color:var(--accent);">Balanced profile</strong>
+                            <span style="color:#bbb; font-size:0.9rem;">Answer the questions and let the algorithm calculate your rating.</span>
+                        </label>
+                        <label class="rating-mode-option" id="ratingModeDirectCard">
+                            <input type="radio" name="ratingMode" id="ratingModeDirect" value="direct">
+                            <strong style="display:block; margin-bottom:4px; color:#4CAF50;">I already know my rating</strong>
+                            <span style="color:#bbb; font-size:0.9rem;">Skip the profile and enter your rating directly.</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="skillProfileWrapper" class="skill-profile-wrapper">
+                <div style="margin: 15px 0 5px 0; color: #aaa; font-size: 0.9rem;">Player Skill Profile:</div>
+                <div class="rating-grid">
+                    <div class="rating-card">
+                        <label for="skatingRating">Skating (1-10)</label>
+                        <input type="number" id="skatingRating" min="1" max="10" step="1" placeholder="Speed / edges" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="puckSkillsRating">Puck Skills (1-10)</label>
+                        <input type="number" id="puckSkillsRating" min="1" max="10" step="1" placeholder="Hands / passing" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="hockeySenseRating">Hockey Sense (1-10)</label>
+                        <input type="number" id="hockeySenseRating" min="1" max="10" step="1" placeholder="Reads / positioning" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="conditioningRating">Conditioning (1-10)</label>
+                        <input type="number" id="conditioningRating" min="1" max="10" step="1" placeholder="Game pace" required style="margin:0;">
+                    </div>
+                </div>
+
+                <div class="profile-field">
+                    <label for="levelPlayed">Highest recent level played</label>
+                    <select id="levelPlayed" required>
+                        <option value="">Select one</option>
+                        <option value="beginner">Beginner / shinny only</option>
+                        <option value="house">House league</option>
+                        <option value="pickup">Intermediate pickup</option>
+                        <option value="select">Strong pickup / select</option>
+                        <option value="competitive">High-level competitive / junior</option>
+                    </select>
+                </div>
+
+                <div class="profile-field">
+                    <label for="peerComparison">Compared to the average player in this group</label>
+                    <select id="peerComparison" required>
+                        <option value="">Select one</option>
+                        <option value="below">Below average</option>
+                        <option value="average">Average</option>
+                        <option value="above">Above average</option>
+                        <option value="top">One of the stronger players</option>
+                    </select>
+                </div>
+
+                <div class="profile-field">
+                    <label for="confidenceLevel">How confident are you in your self-rating?</label>
+                    <select id="confidenceLevel" required>
+                        <option value="">Select one</option>
+                        <option value="low">Not very confident</option>
+                        <option value="medium">Somewhat confident</option>
+                        <option value="high">Very confident</option>
+                    </select>
+                </div>
+                </div>
+
+                <div class="direct-rating-box hidden" id="directRatingBox">
+                    <label for="directRating" style="display:block; margin-bottom:6px; color:#d6ffd6; font-weight:600;">Enter your known rating (1-10)</label>
+                    <input type="number" id="directRating" min="1" max="10" step="0.1" placeholder="Example: 6.5" style="margin:0; background:#182118; border:1px solid #4CAF50;">
+                    <div class="small-note">Use this only if you already know your true rating and are confident in it.</div>
+                </div>
+
+                <div class="rating-summary-box">
+                    <div style="margin-bottom:6px; color:#d6ffd6;">Calculated team-balance rating</div>
+                    <input type="number" id="rating" min="1" max="10" step="0.1" readonly required style="width:100%; padding:12px; margin:0; background:#182118; border:1px solid #4CAF50; color:#fff; border-radius:5px; font-size:1.1rem; text-align:center; font-weight:bold;">
+                    <div class="small-note">Built from your skill profile so teams are matched more evenly. Admin may fine-tune after games.</div>
+                </div>
+                <div class="rating-info" style="background: #1a1a1a; padding: 12px; border-radius: 5px; margin-top: 10px; line-height: 1.6;">
+                    <strong style="color: var(--accent);">Quick guide:</strong><br>
+                    <strong>3-4:</strong> lower recreational / newer player<br>
+                    <strong>5:</strong> average pickup player<br>
+                    <strong>6:</strong> solid pickup player<br>
+                    <strong>7:</strong> strong player<br>
+                    <strong>8:</strong> elite pickup player<br>
+                    <strong>9-10:</strong> rare high-end player for this skate
+                </div>
+
+                <div style="margin: 15px 0; color: #aaa; font-size: 0.9rem;">Payment Method:</div>
+                
+                <div class="payment-options" id="paymentOptions">
+                    <div>
+                        <input type="radio" name="payment" id="etransfer" value="E-Transfer" checked>
+                        <label for="etransfer">E-Transfer ($15)</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="payment" id="cash" value="Cash">
+                        <label for="cash">Cash ($15)</label>
+                    </div>
+                    <div>
+                        <input type="radio" name="payment" id="pia" value="PIA">
+                        <label for="pia">PIA - Pay In Advance</label>
+                    </div>
+                </div>
+                
+                <div id="etransferInfo" style="background: #222; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px;">
+                    Send $15 to: <strong>okosoff@outlook.com</strong><br>
+                    <span style="color: var(--accent);">* E-Transfer payment must be received before stepping on the ice *</span>
+                </div>
+
+                <div id="cashInfo" style="display:none; background: #3a2a1a; padding: 15px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; color: #ff9800; border: 1px solid #ff9800;">
+                    <strong>💵 Cash Payment ($15)</strong><br>
+                    Phan collects cash prior to the game.<br>
+                    <span style="color: #aaa;">If Phan is absent: Kyle Smith or Brad Gervais will collect</span><br>
+                    <span style="color: var(--accent);">* Must be paid before taking the ice *</span>
+                </div>
+
+                <div id="piaInfo" style="display:none; background: #1a3a3a; padding: 15px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; color: #4a90e2; border: 1px solid #4a90e2;">
+                    <strong>💰 PIA (Pay In Advance) - $13 per Sunday</strong><br>
+                    <span id="piaCalculation">Calculating...</span><br>
+                    <span style="color: var(--accent);">* Pay once per month for all upcoming Sundays *</span>
+                </div>
+
+                <button type="submit" id="submitBtn">Continue</button>
+                <div id="signupError" style="display:none; margin-top:12px; background:#3a1a1a; border:1px solid #ff4444; color:#ff4444; padding:12px; border-radius:5px; text-align:center;"></div>
+                
+                <button type="button" class="view-waitlist-btn" onclick="window.location.href='/waitlist'">View Current Waitlist</button>
+            </form>
+        </div>
+
+        <div id="successMessage" style="display:none; text-align:center; padding: 20px;">
+            <h2 style="color: var(--accent);">You're Registered!</h2>
+            <p style="font-size: 1.1rem; color: #ccc; margin: 20px 0;">
+                Check back to see your team assignment after roster is released.
+            </p>
+            <p style="color: #ff4444; font-weight: bold; margin: 20px 0;">
+                ⚠️ E-Transfer payment must be received before stepping on the ice!
+            </p>
+            <button type="button" class="view-roster-btn" onclick="window.location.href='/'" style="margin-top: 20px;">
+                View Current Page
+            </button>
+        </div>
+
+        <div id="waitlistMessage" style="display:none; text-align:center; padding: 20px;">
+            <h2 style="color: #ff6b00;">You're on the Waitlist!</h2>
+            <p style="font-size: 1.2rem;">Position: <strong id="waitlistPosition">#</strong></p>
+            <p style="color: #aaa; margin-top: 20px;">
+                Position 1 on waitlist will automatically be assigned a spot if there's a cancellation<br>
+                <a href="/waitlist" style="color:#ff6b00;">View Waitlist</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Cancel Registration Modal -->
+    <div class="modal-overlay" id="cancelModal">
+        <div class="modal-content">
+            <h3>⚠️ Cancel Registration</h3>
+            <p>Enter the phone number you used to register to confirm cancellation:</p>
+            <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
+            <div class="cancel-error" id="cancelError"></div>
+            <div class="cancel-success" id="cancelSuccess"></div>
+            <div class="modal-buttons">
+                <button class="abort-btn" onclick="closeCancelModal()">Abort</button>
+                <button class="confirm-cancel" onclick="confirmCancel()">Confirm Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let verifiedCode = null;
+        let codeRequired = true;
+        let currentLocation = "";
+        let currentTime = "";
+        let currentDate = "";
+        let playerSpotsAvailable = 20;
+        let isFull = false;
+        let tempRegistrationData = null;
+        let rosterReleased = false;
+        let currentPlayers = [];
+        let maintenanceMode = false;
+        let currentAnnouncementEnabled = false;
+        let rosterCountdownTimer = null;
+        let currentRosterReleaseAt = null;
+
+        let playerToCancel = null;
+
+        function capitalizeNamePart(part) {
+            return String(part || '')
+                .toLowerCase()
+                .replace(/(^|[\s'-])([a-z])/g, (m, sep, chr) => sep + chr.toUpperCase());
+        }
+
+        function capitalizeFullName(value) {
+            return String(value || '')
+                .trim()
+                .split(/\s+/)
+                .map(capitalizeNamePart)
+                .join(' ');
+        }
+
+        function normalizePhoneDigits(value) {
+            let digits = String(value || '').replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) {
+                digits = digits.slice(1);
+            }
+            return digits;
+        }
+
+        function formatPhoneInputValue(value) {
+            const digits = normalizePhoneDigits(value);
+            if (digits.length === 0) return '';
+            if (digits.length <= 3) return `(${digits}`;
+            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+        }
+
+        function normalizePhoneInput() {
+            const phoneEl = document.getElementById('phone');
+            if (!phoneEl) return '';
+            const digits = normalizePhoneDigits(phoneEl.value);
+            phoneEl.value = formatPhoneInputValue(digits);
+            return digits;
+        }
+
+        function normalizeCancelPhoneInput() {
+            const phoneEl = document.getElementById('cancelPhoneInput');
+            if (!phoneEl) return '';
+            const digits = normalizePhoneDigits(phoneEl.value).slice(0, 10);
+            phoneEl.value = formatPhoneInputValue(digits);
+            return digits;
+        }
+
+        function normalizeNameInputs() {
+            const firstNameEl = document.getElementById('firstName');
+            const lastNameEl = document.getElementById('lastName');
+            if (firstNameEl) firstNameEl.value = capitalizeFullName(firstNameEl.value);
+            if (lastNameEl) lastNameEl.value = capitalizeFullName(lastNameEl.value);
+        }
+
+        function showSignupError(message) {
+            const errorEl = document.getElementById('signupError');
+            if (!errorEl) return;
+            errorEl.innerText = message || 'Unable to complete signup.';
+            errorEl.style.display = 'block';
+        }
+
+        function hideSignupError() {
+            const errorEl = document.getElementById('signupError');
+            if (!errorEl) return;
+            errorEl.innerText = '';
+            errorEl.style.display = 'none';
+        }
+
+        const LEVEL_PLAY_RATING_MAP = {
+            beginner: 3.5,
+            house: 4.5,
+            pickup: 5.5,
+            select: 6.8,
+            competitive: 8.0
+        };
+
+        const PEER_COMPARISON_ADJUSTMENT_MAP = {
+            below: -0.5,
+            average: 0,
+            above: 0.5,
+            top: 1.0
+        };
+
+        const CONFIDENCE_WEIGHT_MAP = {
+            low: { selfWeight: 0.50, levelWeight: 0.50 },
+            medium: { selfWeight: 0.65, levelWeight: 0.35 },
+            high: { selfWeight: 0.75, levelWeight: 0.25 }
+        };
+
+        function clampRatingInput(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return null;
+            return Math.max(1, Math.min(10, num));
+        }
+
+        function roundRatingValue(value) {
+            return Math.round(Number(value) * 10) / 10;
+        }
+
+        function getSelectedRatingMode() {
+            return document.querySelector('input[name="ratingMode"]:checked')?.value || 'profile';
+        }
+
+        function updateRatingModeUi() {
+            const mode = getSelectedRatingMode();
+            const profileWrap = document.getElementById('skillProfileWrapper');
+            const directBox = document.getElementById('directRatingBox');
+            const profileCard = document.getElementById('ratingModeProfileCard');
+            const directCard = document.getElementById('ratingModeDirectCard');
+
+            if (profileWrap) profileWrap.classList.toggle('hidden', mode !== 'profile');
+            if (directBox) directBox.classList.toggle('hidden', mode !== 'direct');
+            if (profileCard) profileCard.classList.toggle('active', mode === 'profile');
+            if (directCard) directCard.classList.toggle('active', mode === 'direct');
+
+            const profileFields = [
+                'skatingRating',
+                'puckSkillsRating',
+                'hockeySenseRating',
+                'conditioningRating',
+                'levelPlayed',
+                'peerComparison',
+                'confidenceLevel'
+            ];
+
+            profileFields.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.required = (mode === 'profile');
+                if (mode !== 'profile') el.setCustomValidity('');
+            });
+
+            const directRatingEl = document.getElementById('directRating');
+            if (directRatingEl) {
+                directRatingEl.required = (mode === 'direct');
+                if (mode !== 'direct') directRatingEl.setCustomValidity('');
+            }
+        }
+
+        function buildRatingProfilePayload() {
+            const ratingMode = getSelectedRatingMode();
+            if (ratingMode === 'direct') {
+                const directRating = clampRatingInput(document.getElementById('directRating')?.value);
+                if (directRating === null) return null;
+                const rounded = roundRatingValue(directRating);
+                return {
+                    ratingMode: 'direct',
+                    directRating: rounded,
+                    skatingRating: null,
+                    puckSkillsRating: null,
+                    hockeySenseRating: null,
+                    conditioningRating: null,
+                    levelPlayed: '',
+                    peerComparison: '',
+                    confidenceLevel: '',
+                    selfRatingRaw: rounded,
+                    derivedRating: rounded,
+                    finalRating: rounded
+                };
+            }
+
+            const skating = clampRatingInput(document.getElementById('skatingRating')?.value);
+            const puck = clampRatingInput(document.getElementById('puckSkillsRating')?.value);
+            const sense = clampRatingInput(document.getElementById('hockeySenseRating')?.value);
+            const conditioning = clampRatingInput(document.getElementById('conditioningRating')?.value);
+            const levelPlayed = document.getElementById('levelPlayed')?.value || '';
+            const peerComparison = document.getElementById('peerComparison')?.value || '';
+            const confidenceLevel = document.getElementById('confidenceLevel')?.value || '';
+
+            if ([skating, puck, sense, conditioning].some(v => v === null) || !levelPlayed || !peerComparison || !confidenceLevel) {
+                return null;
+            }
+
+            const baseSkill = roundRatingValue((skating + puck + sense + conditioning) / 4);
+            const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
+            const peerAdjustment = PEER_COMPARISON_ADJUSTMENT_MAP[peerComparison] ?? 0;
+            const weights = CONFIDENCE_WEIGHT_MAP[confidenceLevel] || CONFIDENCE_WEIGHT_MAP.medium;
+            const derivedRating = roundRatingValue((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
+
+            return {
+                ratingMode: 'profile',
+                directRating: null,
+                skatingRating: skating,
+                puckSkillsRating: puck,
+                hockeySenseRating: sense,
+                conditioningRating: conditioning,
+                levelPlayed,
+                peerComparison,
+                confidenceLevel,
+                selfRatingRaw: baseSkill,
+                derivedRating,
+                finalRating: derivedRating
+            };
+        }
+
+        function updateCalculatedRating() {
+            updateRatingModeUi();
+            const ratingEl = document.getElementById('rating');
+            if (!ratingEl) return;
+            const profile = buildRatingProfilePayload();
+            ratingEl.value = profile ? profile.derivedRating.toFixed(1) : '';
+            saveFormData();
+        }
+
+        function validateSkillProfile() {
+            const profile = buildRatingProfilePayload();
+            if (!profile) {
+                const mode = getSelectedRatingMode();
+                showSignupError(mode === 'direct'
+                    ? 'Please enter your direct rating from 1 to 10.'
+                    : 'Please complete the full skill profile so your teams can be balanced properly.');
+                return false;
+            }
+            return true;
+        }
+
+        function validateSignupNameAndPhone() {
+            normalizeNameInputs();
+            const phoneDigits = normalizePhoneInput();
+            if (phoneDigits.length !== 10) {
+                showSignupError('Phone number must be exactly 10 digits.');
+                document.getElementById('phone')?.focus();
+                return false;
+            }
+            hideSignupError();
+            return true;
+        }
+
+        function loadSavedFormData() {
+            const savedData = sessionStorage.getItem('signupFormData');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                document.getElementById('firstName').value = capitalizeFullName(data.firstName || '');
+                document.getElementById('lastName').value = capitalizeFullName(data.lastName || '');
+                document.getElementById('phone').value = formatPhoneInputValue(data.phone || '');
+                const savedMode = data.ratingMode || 'profile';
+                const savedModeRadio = document.querySelector(`input[name="ratingMode"][value="${savedMode}"]`);
+                if (savedModeRadio) savedModeRadio.checked = true;
+                document.getElementById('directRating').value = data.directRating || '';
+                document.getElementById('skatingRating').value = data.skatingRating || '';
+                document.getElementById('puckSkillsRating').value = data.puckSkillsRating || '';
+                document.getElementById('hockeySenseRating').value = data.hockeySenseRating || '';
+                document.getElementById('conditioningRating').value = data.conditioningRating || '';
+                document.getElementById('levelPlayed').value = data.levelPlayed || '';
+                document.getElementById('peerComparison').value = data.peerComparison || '';
+                document.getElementById('confidenceLevel').value = data.confidenceLevel || '';
+                document.getElementById('rating').value = data.rating || '';
+                if (data.paymentMethod) {
+                    const radio = document.querySelector(`input[name="payment"][value="${data.paymentMethod}"]`);
+                    if (radio) radio.checked = true;
+                }
+                handlePaymentChange();
+                updateCalculatedRating();
+            }
+        }
+
+        function saveFormData() {
+            normalizeNameInputs();
+            normalizePhoneInput();
+            const data = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                phone: document.getElementById('phone').value,
+                ratingMode: getSelectedRatingMode(),
+                directRating: document.getElementById('directRating').value,
+                skatingRating: document.getElementById('skatingRating').value,
+                puckSkillsRating: document.getElementById('puckSkillsRating').value,
+                hockeySenseRating: document.getElementById('hockeySenseRating').value,
+                conditioningRating: document.getElementById('conditioningRating').value,
+                levelPlayed: document.getElementById('levelPlayed').value,
+                peerComparison: document.getElementById('peerComparison').value,
+                confidenceLevel: document.getElementById('confidenceLevel').value,
+                rating: document.getElementById('rating').value,
+                paymentMethod: document.querySelector('input[name="payment"]:checked')?.value
+            };
+            sessionStorage.setItem('signupFormData', JSON.stringify(data));
+        }
+        
+        function getDaysInMonthByDow(year, month, targetDow) {
+            const days = [];
+            const date = new Date(year, month, 1);
+            while (date.getMonth() === month) {
+                if (date.getDay() === targetDow) {
+                    days.push(new Date(date));
+                }
+                date.setDate(date.getDate() + 1);
+            }
+            return days;
+        }
+
+        function parseDayNameFromGameTime(gameTimeStr) {
+            // Expected: "Friday 9:30 PM" etc.
+            if (!gameTimeStr || typeof gameTimeStr !== 'string') return null;
+            const m = gameTimeStr.trim().match(/^([A-Za-z]+)\s+/);
+            if (!m) return null;
+            const dn = m[1];
+            return dn.charAt(0).toUpperCase() + dn.slice(1).toLowerCase();
+        }
+
+        function dayIndexFromName(dayName) {
+            const map = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+            return map[dayName];
+        }
+        
+        function updatePIACalculation() {
+            const now = new Date();
+
+            // Use the selected game day (from the configured game time), fallback to Sunday.
+            const dayName = parseDayNameFromGameTime(currentTime) || 'Sunday';
+            const targetDow = dayIndexFromName(dayName);
+            const dayLabel = dayName; // e.g. "Friday"
+
+            // Determine whether to show current month or next month rates (keeps your existing intent)
+            const currentMonthDays = getDaysInMonthByDow(now.getFullYear(), now.getMonth(), targetDow);
+            const lastGameDayOfMonth = currentMonthDays[currentMonthDays.length - 1];
+
+            const isLastGameDayOrAfter = lastGameDayOfMonth
+                ? now.getDate() >= lastGameDayOfMonth.getDate()
+                : false;
+
+            let targetMonth, targetYear, days, monthLabel;
+
+            if (isLastGameDayOrAfter) {
+                targetMonth = now.getMonth() + 1;
+                targetYear = now.getFullYear();
+
+                if (targetMonth > 11) {
+                    targetMonth = 0;
+                    targetYear++;
+                }
+
+                days = getDaysInMonthByDow(targetYear, targetMonth, targetDow);
+                const nextMonthName = new Date(targetYear, targetMonth).toLocaleDateString('en-US', { month: 'long' });
+                monthLabel = '<strong>' + nextMonthName + ' (Next Month):</strong>';
+            } else {
+                targetMonth = now.getMonth();
+                targetYear = now.getFullYear();
+                days = currentMonthDays;
+                const monthName = now.toLocaleDateString('en-US', { month: 'long' });
+                monthLabel = '<strong>' + monthName + ':</strong>';
+            }
+
+            const numDays = days.length;
+            const totalCost = numDays * 13;
+
+            const piaCalc = document.getElementById('piaCalculation');
+            if (piaCalc) {
+                let html = monthLabel + ' ' + numDays + ' ' + dayLabel;
+                if (numDays !== 1) html += 's';
+                html += ' × $13 = <strong>$' + totalCost + '</strong> total';
+                if (isLastGameDayOrAfter) {
+                    html += ' <br><small style="color:#4CAF50;">🗓️ Showing next month rate</small>';
+                }
+                piaCalc.innerHTML = html;
+            }
+        }
+
+        function handlePaymentChange() {
+            const etransfer = document.getElementById('etransfer');
+            const cash = document.getElementById('cash');
+            const pia = document.getElementById('pia');
+            const etransferInfo = document.getElementById('etransferInfo');
+            const cashInfo = document.getElementById('cashInfo');
+            const piaInfo = document.getElementById('piaInfo');
+            
+            etransferInfo.style.display = 'none';
+            cashInfo.style.display = 'none';
+            piaInfo.style.display = 'none';
+            
+            if (pia && pia.checked) {
+                piaInfo.style.display = 'block';
+                updatePIACalculation();
+            } else if (cash && cash.checked) {
+                cashInfo.style.display = 'block';
+            } else if (etransfer && etransfer.checked) {
+                etransferInfo.style.display = 'block';
+            }
+            saveFormData();
+        }
+
+        async function loadAndDisplayRoster() {
+            try {
+                const res = await fetch(`${API_URL}/api/roster`);
+                const data = await res.json();
+                
+                if (!data.released) {
+                    document.getElementById('rosterDisplay').classList.remove('active');
+                    return false;
+                }
+                
+                document.getElementById('rosterGameInfo').innerText = 
+                    `${data.formattedDate || data.date || currentDate} | ${data.location || currentLocation} | ${data.time || currentTime}`;
+                
+                document.getElementById('whiteCount').innerText = data.whiteTeam.length;
+                document.getElementById('darkCount').innerText = data.darkTeam.length;
+                
+                const whiteList = document.getElementById('whiteTeamList');
+                whiteList.innerHTML = '';
+                if (data.whiteTeam && Array.isArray(data.whiteTeam)) {
+                    data.whiteTeam.forEach(player => {
+                        const li = document.createElement('li');
+                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
+                        const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        li.innerHTML = `
+                            <span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge}</span>
+                        `;
+                        whiteList.appendChild(li);
+                    });
+                }
+                
+                const darkList = document.getElementById('darkTeamList');
+                darkList.innerHTML = '';
+                if (data.darkTeam && Array.isArray(data.darkTeam)) {
+                    data.darkTeam.forEach(player => {
+                        const li = document.createElement('li');
+                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
+                        const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        li.innerHTML = `
+                            <span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge}</span>
+                        `;
+                        darkList.appendChild(li);
+                    });
+                }
+                
+                document.getElementById('rosterDisplay').classList.add('active');
+                return true;
+                
+            } catch (err) {
+                console.error("Error loading roster:", err);
+                return false;
+            }
+        }
+
+
+
+        function renderAnnouncement(data) {
+            const bulletin = document.getElementById('announcementBulletin');
+            const textEl = document.getElementById('announcementText');
+            const thumbEl = document.getElementById('announcementThumb');
+            if (!bulletin || !textEl || !thumbEl) return;
+
+            const enabled = !!data.announcementEnabled;
+            const text = (data.announcementText || '').trim();
+            const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
+            const image = images.length ? String(images[0] || '').trim() : '';
+            const shouldShow = enabled && (!!text || !!image);
+
+            if (!shouldShow) {
+                bulletin.classList.remove('active');
+                textEl.textContent = '';
+                thumbEl.src = '';
+                thumbEl.classList.remove('visible');
+                return;
+            }
+
+            textEl.textContent = text || 'Attention';
+            if (image) {
+                thumbEl.src = image;
+                thumbEl.classList.add('visible');
+            } else {
+                thumbEl.src = '';
+                thumbEl.classList.remove('visible');
+            }
+            bulletin.classList.add('active');
+        }
+
+
+        function formatCountdown(msRemaining) {
+            const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (days > 0) {
+                return `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+            }
+            return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+        }
+
+        function stopRosterCountdown() {
+            if (rosterCountdownTimer) {
+                clearInterval(rosterCountdownTimer);
+                rosterCountdownTimer = null;
+            }
+        }
+
+        function formatEliteRosterHeadline(releaseIso, fallbackHeadline) {
+            if (!releaseIso) return fallbackHeadline || '📅 Check Back for roster release';
+
+            const releaseDate = new Date(releaseIso);
+            if (Number.isNaN(releaseDate.getTime())) {
+                return fallbackHeadline || '📅 Check Back for roster release';
+            }
+
+            const datePart = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            }).format(releaseDate);
+
+            const timePart = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }).format(releaseDate);
+
+            return `📅 Check Back ${datePart} • Roster Release ${timePart} ET`;
+        }
+
+        function renderRosterCountdown() {
+            const countdownWrap = document.getElementById('rosterCountdown');
+            const countdownValue = document.getElementById('rosterCountdownValue');
+            const countdownLabel = document.getElementById('rosterCountdownLabel');
+            const placeholder = document.getElementById('rosterCountdownPlaceholder');
+
+            if (!currentRosterReleaseAt || rosterReleased) {
+                stopRosterCountdown();
+                countdownWrap.style.display = 'none';
+                placeholder.style.display = rosterReleased ? 'none' : 'block';
+                placeholder.textContent = rosterReleased
+                    ? ''
+                    : 'Countdown will appear once a roster release time is scheduled.';
+                return;
+            }
+
+            const releaseMs = Date.parse(currentRosterReleaseAt);
+            if (!Number.isFinite(releaseMs)) {
+                stopRosterCountdown();
+                countdownWrap.style.display = 'none';
+                placeholder.style.display = 'block';
+                placeholder.textContent = 'Countdown will appear once a roster release time is scheduled.';
+                return;
+            }
+
+            const tick = () => {
+                const remaining = releaseMs - Date.now();
+                if (remaining <= 0) {
+                    countdownWrap.style.display = 'none';
+                    placeholder.style.display = 'block';
+                    placeholder.textContent = 'Roster release time has arrived. Refresh if teams are not shown yet.';
+                    stopRosterCountdown();
+                    return;
+                }
+                countdownValue.textContent = formatCountdown(remaining);
+                countdownLabel.textContent = 'until roster release';
+                countdownWrap.style.display = 'flex';
+                placeholder.style.display = 'none';
+            };
+
+            tick();
+            stopRosterCountdown();
+            rosterCountdownTimer = setInterval(tick, 1000);
+        }
+
+        async function checkStatus() {
+            try {
+                const res = await fetch(`${API_URL}/api/status`);
+                const data = await res.json();
+                
+                // Handle maintenance mode
+                maintenanceMode = data.maintenanceMode;
+                const maintenanceBulletin = document.getElementById('maintenanceBulletin');
+                if (maintenanceMode) {
+                    maintenanceBulletin.textContent = (data.maintenanceText || 'Portal is down for maintenance, check back later');
+                    maintenanceBulletin.classList.add('active');
+                } else {
+                    maintenanceBulletin.classList.remove('active');
+                }
+
+                renderAnnouncement(data);
+
+                // Update dynamic title
+                if (data.customTitle) {
+                    document.getElementById('pageTitle').innerText = data.customTitle;
+                    document.title = data.customTitle;
+                }
+                
+                currentLocation = data.location;
+                currentTime = data.time;
+                currentDate = data.formattedDate;
+                playerSpotsAvailable = data.playerSpotsRemaining;
+                const openSpotsNoticeEl = document.getElementById('openSpotsNotice');
+                if (data.openSpotsNotice) {
+                    openSpotsNoticeEl.textContent = data.openSpotsNotice;
+                    openSpotsNoticeEl.classList.add('active');
+                } else {
+                    openSpotsNoticeEl.textContent = '';
+                    openSpotsNoticeEl.classList.remove('active');
+                }
+
+                isFull = data.isFull;
+                rosterReleased = data.rosterReleased;
+                currentRosterReleaseAt = data.rosterReleaseAt || null;
+                const isLockedWindow = data.isLockedWindow;
+                
+                currentPlayers = data.players || [];
+                
+                document.getElementById('gameLocation').innerText = currentLocation;
+                document.getElementById('gameTime').innerText = currentTime;
+                document.getElementById('gameDate').innerText = currentDate;
+                document.getElementById('rosterNoticeHeadline').innerText = '';
+                document.getElementById('rosterMeta').innerText =
+                    data.rosterReleaseAt
+                        ? new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'America/New_York',
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        }).format(new Date(data.rosterReleaseAt)).replace(' at ', ' • ') + ' ET'
+                        : 'Roster release time to be announced';
+                renderRosterCountdown();
+                
+                if (rosterReleased) {
+                    await loadAndDisplayRoster();
+                } else {
+                    document.getElementById('rosterDisplay').classList.remove('active');
+                }
+                
+                document.getElementById('spotsLeft').innerText = playerSpotsAvailable;
+                if (playerSpotsAvailable === 0) {
+                    document.getElementById('spotsLeft').classList.add('full');
+                    document.getElementById('waitlistMode').style.display = 'block';
+                } else {
+                    document.getElementById('spotsLeft').classList.remove('full');
+                    document.getElementById('waitlistMode').style.display = 'none';
+                }
+                
+                const effectiveLocked = !!(data.requireCode ?? data.signupLocked);
+                codeRequired = effectiveLocked;
+
+                const lockNotice = document.getElementById('lockNotice');
+                if (effectiveLocked && !data.rosterReleased) {
+                    lockNotice.style.display = 'block';
+                    lockNotice.innerHTML = `
+                        <strong>🔒 Signup Temporarily Locked</strong>
+                        <span class="open-time">${data.openLine || '✅ Signup opens to all players at the scheduled unlock time'}</span>
+                        <span class="no-code-note">${data.noCodeLine || 'No code required after signup opens to all players.'}</span>
+                    `;
+                } else {
+                    lockNotice.style.display = 'none';
+                }
+
+                if (data.rosterReleased) {
+                    document.getElementById('registeredPlayersSection').style.display = 'none';
+                    document.getElementById('codeSection').style.display = 'none';
+                    document.getElementById('signupForm').style.display = 'none';
+                    document.getElementById('waitlistMode').style.display = 'none';
+                } else {
+                    document.getElementById('registeredPlayersSection').style.display = 'block';
+                    document.getElementById('codeSection').style.display = 'block';
+                    await loadRegisteredPlayers();
+                }
+
+                const codeTitle = document.getElementById('codeTitle');
+                if (effectiveLocked) {
+                    document.getElementById('codeEntryBox').style.display = 'block';
+                    document.getElementById('openNotice').style.display = 'none';
+                    if (!verifiedCode) {
+                        document.getElementById('signupForm').style.display = 'none';
+                    }
+                    if (isLockedWindow) {
+                        codeTitle.innerHTML = `🔒 Signup Locked (${data.lockWindowShort || 'scheduled window'})<br><small>Enter 4-Digit Code to Sign Up</small>`;
+                        codeTitle.style.color = '#ff4444';
+                    } else {
+                        codeTitle.innerText = '🔒 Enter 4-Digit Code to Sign Up';
+                        codeTitle.style.color = 'var(--accent)';
+                    }
+                } else {
+                    document.getElementById('codeEntryBox').style.display = 'none';
+                    document.getElementById('openNotice').style.display = 'block';
+                    document.getElementById('signupForm').style.display = 'block';
+                }
+                
+            } catch (e) {
+                console.error("Error fetching status", e);
+            }
+        }
+
+        setInterval(() => {
+            checkStatus().catch(err => console.error("Status check failed:", err));
+        }, 10000);
+        
+        
+        async function loadRegisteredPlayers() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/players`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: 'public_view' })
+                });
+
+                if (!res.ok) {
+                    const statusRes = await fetch(`${API_URL}/api/status`);
+                    const statusData = await statusRes.json();
+
+                    if (statusData.players) {
+                        renderPlayers(statusData.players);
+                    }
+                    return;
+                }
+
+                const data = await res.json();
+                renderPlayers(data.players);
+            } catch (err) {
+                console.error("Error loading players:", err);
+            }
+        }
+
+        function renderPlayers(players) {
+            const grid = document.getElementById('playersGrid');
+            const countSpan = document.getElementById('registeredCount');
+
+            if (!players || players.length === 0) {
+                grid.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">No players registered yet</div>';
+                countSpan.innerText = '0';
+                return;
+            }
+
+            const sortedPlayers = [...players].sort((a, b) => {
+                const aFirst = String(a.firstName || '').toLowerCase();
+                const aLast = String(a.lastName || '').toLowerCase();
+                const bFirst = String(b.firstName || '').toLowerCase();
+                const bLast = String(b.lastName || '').toLowerCase();
+
+                const aIsPhan = aFirst === 'phan' && aLast === 'ly';
+                const bIsPhan = bFirst === 'phan' && bLast === 'ly';
+                const aIsGoalie = !!a.isGoalie;
+                const bIsGoalie = !!b.isGoalie;
+
+                if (aIsGoalie !== bIsGoalie) return aIsGoalie ? -1 : 1;
+                if (aIsPhan !== bIsPhan) return aIsPhan ? -1 : 1;
+
+                const nameA = `${aLast} ${aFirst}`.trim();
+                const nameB = `${bLast} ${bFirst}`.trim();
+                return nameA.localeCompare(nameB);
+            });
+
+            countSpan.innerText = sortedPlayers.length;
+
+            grid.innerHTML = '';
+            sortedPlayers.forEach(player => {
+                const card = document.createElement('div');
+
+                const firstName = String(player.firstName || '');
+                const lastName = String(player.lastName || '');
+                const isProtected = firstName.toLowerCase() === 'phan' && lastName.toLowerCase() === 'ly';
+                const isGoalie = !!player.isGoalie;
+
+                let cardClass = 'player-card';
+                if (isGoalie) cardClass += ' goalie-card';
+                if (isProtected) cardClass += ' protected-card';
+                card.className = cardClass;
+
+                const initials = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase();
+                const goalieLabel = isGoalie ? '<div class="goalie-label">GOALIE</div>' : '';
+                const protectedLabel = isProtected ? '<div class="protected-label">PROTECTED</div>' : '';
+
+                let cancelButton = '';
+                if (!isGoalie && !isProtected && !rosterReleased && player.canCancel !== false) {
+                    cancelButton = `<button class="cancel-btn" onclick="openCancelModal(${player.id}, '${firstName}', '${lastName}')">Cancel</button>`;
+                }
+
+                card.innerHTML = `
+                    <div class="player-avatar">${initials}</div>
+                    <div class="player-info-simple">
+                        <div class="player-name-simple">${firstName} ${lastName}</div>
+                        ${goalieLabel}
+                        ${protectedLabel}
+                    </div>
+                    ${cancelButton}
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function openCancelModal(playerId, firstName, lastName) {
+            if (rosterReleased) {
+                alert('Cannot cancel after roster has been released.');
+                return;
+            }
+            playerToCancel = { id: playerId, firstName, lastName };
+            document.getElementById('cancelPhoneInput').value = '';
+            document.getElementById('cancelError').style.display = 'none';
+            document.getElementById('cancelSuccess').style.display = 'none';
+            document.getElementById('cancelModal').classList.add('active');
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancelModal').classList.remove('active');
+            playerToCancel = null;
+        }
+
+        async function confirmCancel() {
+            if (!playerToCancel) return;
+
+            const cancelPhoneDigits = normalizeCancelPhoneInput();
+            const phone = formatPhoneInputValue(cancelPhoneDigits);
+            const errorDiv = document.getElementById('cancelError');
+            const successDiv = document.getElementById('cancelSuccess');
+
+            if (!cancelPhoneDigits) {
+                errorDiv.innerText = 'Please enter your phone number.';
+                errorDiv.style.display = 'block';
+                document.getElementById('cancelPhoneInput').focus();
+                return;
+            }
+
+            if (cancelPhoneDigits.length !== 10) {
+                errorDiv.innerText = 'Phone number must be exactly 10 digits.';
+                errorDiv.style.display = 'block';
+                document.getElementById('cancelPhoneInput').focus();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/cancel-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerId: playerToCancel.id,
+                        phone: phone
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    errorDiv.style.display = 'none';
+                    let successMsg = `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s registration has been cancelled.`;
+                    if (data.promotedPlayer) {
+                        successMsg += `<br><br>🎉 ${data.promotedPlayer.firstName} ${data.promotedPlayer.lastName} has been promoted from the waitlist!`;
+                    }
+                    successDiv.innerHTML = successMsg;
+                    successDiv.style.display = 'block';
+                    
+                    setTimeout(() => {
+                        closeCancelModal();
+                        checkStatus();
+                    }, 2500);
+                } else {
+                    errorDiv.innerText = data.error || 'Failed to cancel registration.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Cancel error:', err);
+                errorDiv.innerText = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        const cancelPhoneInputEl = document.getElementById('cancelPhoneInput');
+        if (cancelPhoneInputEl) {
+            cancelPhoneInputEl.addEventListener('input', function() {
+                normalizeCancelPhoneInput();
+            });
+        }
+
+        document.getElementById('cancelModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeCancelModal();
+            }
+        });
+
+        checkStatus();
+
+        function validateDigit(input) {
+            input.value = input.value.replace(/[^0-9]/g, '');
+        }
+
+        function moveToNext(current, nextId) {
+            if (current.value.length === 1) {
+                document.getElementById(nextId).focus();
+            }
+        }
+
+        function checkCodeEnter(event) {
+            if (event.key === 'Enter') verifyCode();
+        }
+
+        async function verifyCode() {
+            const code = document.getElementById('code1').value + 
+                        document.getElementById('code2').value + 
+                        document.getElementById('code3').value + 
+                        document.getElementById('code4').value;
+
+            if (code.length !== 4) {
+                document.getElementById('codeError').style.display = 'block';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/verify-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                });
+
+                if (res.ok) {
+                    verifiedCode = code;
+                    document.getElementById('codeSection').style.display = 'none';
+                    document.getElementById('signupForm').style.display = 'block';
+                } else {
+                    document.getElementById('codeError').style.display = 'block';
+                    document.getElementById('code1').value = '';
+                    document.getElementById('code2').value = '';
+                    document.getElementById('code3').value = '';
+                    document.getElementById('code4').value = '';
+                    document.getElementById('code1').focus();
+                }
+            } catch (err) {
+                alert("Error verifying code");
+            }
+        }
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideSignupError();
+
+            if (!validateSignupNameAndPhone()) {
+                return;
+            }
+
+            if (!validateSkillProfile()) {
+                return;
+            }
+
+            if (maintenanceMode) {
+                showSignupError('Portal is currently down for maintenance. Please check back later.');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const originalBtnText = submitBtn.innerText;
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Processing...';
+
+            const skillProfile = buildRatingProfilePayload();
+            const formData = {
+                firstName: capitalizeFullName(document.getElementById('firstName').value),
+                lastName: capitalizeFullName(document.getElementById('lastName').value),
+                phone: formatPhoneInputValue(document.getElementById('phone').value),
+                paymentMethod: document.querySelector('input[name="payment"]:checked').value,
+                rating: document.getElementById('rating').value,
+                ratingMode: skillProfile.ratingMode,
+                directRating: skillProfile.directRating,
+                skatingRating: skillProfile.skatingRating,
+                puckSkillsRating: skillProfile.puckSkillsRating,
+                hockeySenseRating: skillProfile.hockeySenseRating,
+                conditioningRating: skillProfile.conditioningRating,
+                levelPlayed: skillProfile.levelPlayed,
+                peerComparison: skillProfile.peerComparison,
+                confidenceLevel: skillProfile.confidenceLevel,
+                isGoalie: false,
+                signupCode: verifiedCode
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/api/register-init`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await res.json();
+
+                if (!res.ok) {
+                    showSignupError(result.error || 'Unable to continue signup.');
+                    return;
+                }
+
+                if (result.success && result.inWaitlist) {
+                    document.getElementById('registrationArea').style.display = 'none';
+                    document.getElementById('waitlistMessage').style.display = 'block';
+                    document.getElementById('waitlistPosition').innerText = '#' + result.waitlistPosition;
+                    sessionStorage.removeItem('signupFormData');
+                    return;
+                }
+
+                if (result.success && result.proceedToRules && result.tempData) {
+                    tempRegistrationData = {
+                        ...result.tempData,
+                        signupCode: verifiedCode
+                    };
+                    sessionStorage.setItem('tempRegData', JSON.stringify(tempRegistrationData));
+                    saveFormData();
+                    window.location.href = '/rules';
+                    return;
+                }
+
+                showSignupError(result.error || 'Unable to continue signup.');
+            } catch (err) {
+                console.error('Signup error:', err);
+                showSignupError('Error registering. Please try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalBtnText;
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSavedFormData();
+            updateRatingModeUi();
+            updatePIACalculation();
+            
+            const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating'];
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', updateCalculatedRating);
+                    el.addEventListener('input', updateCalculatedRating);
+                }
+            });
+
+            document.querySelectorAll('input[name="ratingMode"]').forEach(el => {
+                el.addEventListener('change', () => {
+                    updateRatingModeUi();
+                    updateCalculatedRating();
+                    saveFormData();
+                });
+            });
+
+            ['levelPlayed', 'peerComparison', 'confidenceLevel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', updateCalculatedRating);
+                }
+            });
+
+            ['firstName', 'lastName', 'phone'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', saveFormData);
+                    el.addEventListener('input', saveFormData);
+                }
+            });
+            
+            const paymentRadios = document.querySelectorAll('input[name="payment"]');
+            paymentRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    handlePaymentChange();
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waitlist</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --secondary: #888;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 1.1rem;
+            color: var(--secondary);
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .game-date {
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .waitlist-header {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .waitlist-count {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #ff6b00;
+            margin: 10px 0;
+        }
+
+        .waitlist-label {
+            color: #aaa;
+            font-size: 1.1rem;
+        }
+
+        .waitlist-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .waitlist-item {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .position-number {
+            background: var(--accent);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .player-info {
+            flex: 1;
+        }
+
+        .player-name {
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .goalie-badge {
+            background: #ff6b00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        .player-rating {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+        }
+
+        .back-link a {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 1.1rem;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+
+        /* Cancel button styling */
+        .cancel-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            flex-shrink: 0;
+            white-space: nowrap;
+            line-height: 1;
+            min-width: auto;
+            width: auto;
+            margin: 0;
+        }
+
+        .cancel-btn:hover {
+            background: #ff6666;
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 2px solid #ff4444;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .modal-content h3 {
+            color: #ff4444;
+            margin: 0 0 15px 0;
+        }
+
+        .modal-content p {
+            color: #ccc;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            margin: 0;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        .modal-buttons .confirm-cancel {
+            background: #ff4444;
+        }
+
+        .modal-buttons .confirm-cancel:hover {
+            background: #ff6666;
+        }
+
+        .modal-buttons .abort-btn {
+            background: #555;
+        }
+
+        .modal-buttons .abort-btn:hover {
+            background: #666;
+        }
+
+        .cancel-error {
+            color: #ff4444;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .cancel-success {
+            color: #4CAF50;
+            font-size: 0.9rem;
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(76, 175, 80, 0.1);
+            border-radius: 5px;
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .waitlist-count { font-size: 2.5rem; }
+            .player-name { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="pageTitle">Loading...</h1>
+        <h2>Waitlist</h2>
+
+        <div class="game-info" id="gameInfo">
+            <div class="game-date" id="gameDate">Loading...</div>
+            <div id="gameLocationTime">Loading...</div>
+        </div>
+
+        <div class="waitlist-header">
+            <div class="waitlist-label">Total on Waitlist</div>
+            <div class="waitlist-count" id="totalWaitlist">0</div>
+        </div>
+
+        <div style="text-align:center; color:#ffb366; margin: 14px 0 18px 0; font-size: 0.95rem;">
+            Notice: Waitlist position 1 will automatically be promoted if a player cancels.
+        </div>
+
+        <ul class="waitlist-list" id="waitlistList">
+        </ul>
+
+        <div class="back-link">
+            <a href="/">← Back to Signup</a>
+        </div>
+
+        <div class="refresh-info">
+            Auto-refreshes every 30 seconds
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="cancelModal">
+        <div class="modal-content">
+            <h3>Cancel Waitlist Spot</h3>
+            <p>Enter the same 10-digit phone number used when you joined the waitlist.</p>
+            <input type="tel" id="cancelPhoneInput" placeholder="(555) 555-5555" maxlength="14">
+            <div class="cancel-error" id="cancelError"></div>
+            <div class="cancel-success" id="cancelSuccess"></div>
+            <div class="modal-buttons">
+                <button class="abort-btn" id="abortCancelBtn">Keep Spot</button>
+                <button class="confirm-cancel" id="confirmCancelBtn">Confirm Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        let playerToCancel = null;
+        let rosterReleased = false;
+
+        function normalizePhoneDigits(value) {
+            let digits = String(value || '').replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+            return digits.slice(0, 10);
+        }
+
+        function formatPhoneInputValue(value) {
+            const digits = normalizePhoneDigits(value);
+            if (digits.length === 0) return '';
+            if (digits.length <= 3) return `(${digits}`;
+            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+        }
+
+        function normalizeCancelPhoneInput() {
+            const input = document.getElementById('cancelPhoneInput');
+            if (!input) return '';
+            const digits = normalizePhoneDigits(input.value);
+            input.value = formatPhoneInputValue(digits);
+            return digits;
+        }
+
+        function openCancelModal(player) {
+            console.log('openCancelModal called with player:', player);
+            if (!player || !player.id) {
+                console.error('Invalid player object:', player);
+                return;
+            }
+            if (rosterReleased) {
+                alert('Cannot cancel after roster has been released.');
+                return;
+            }
+            playerToCancel = player;
+            document.getElementById('cancelPhoneInput').value = '';
+            document.getElementById('cancelError').style.display = 'none';
+            document.getElementById('cancelSuccess').style.display = 'none';
+            document.getElementById('cancelModal').classList.add('active');
+            document.getElementById('cancelPhoneInput').focus();
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancelModal').classList.remove('active');
+            playerToCancel = null;
+        }
+
+        async function confirmCancel() {
+            if (!playerToCancel) return;
+
+            const digits = normalizeCancelPhoneInput();
+            const errorDiv = document.getElementById('cancelError');
+            const successDiv = document.getElementById('cancelSuccess');
+
+            if (digits.length !== 10) {
+                errorDiv.innerText = 'Phone number must be exactly 10 digits.';
+                errorDiv.style.display = 'block';
+                document.getElementById('cancelPhoneInput').focus();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/cancel-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerId: playerToCancel.id,
+                        phone: formatPhoneInputValue(digits)
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    errorDiv.style.display = 'none';
+                    successDiv.innerHTML = `✅ ${playerToCancel.fullName || (playerToCancel.firstName + ' ' + playerToCancel.lastName)} has been removed from the waitlist.`;
+                    successDiv.style.display = 'block';
+                    setTimeout(async () => {
+                        closeCancelModal();
+                        await loadWaitlist();
+                    }, 1500);
+                } else {
+                    errorDiv.innerText = data.error || 'Failed to cancel waitlist registration.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Waitlist cancel error:', err);
+                errorDiv.innerText = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        async function loadWaitlist() {
+            try {
+                const res = await fetch(`${API_URL}/api/waitlist`);
+                const data = await res.json();
+                rosterReleased = !!data.rosterReleased;
+
+                try {
+                    const statusRes = await fetch(`${API_URL}/api/status`);
+                    const statusData = await statusRes.json();
+                    if (statusData.customTitle) {
+                        document.getElementById('pageTitle').innerText = statusData.customTitle;
+                        document.title = statusData.customTitle + ' - Waitlist';
+                    }
+                } catch (e) { /* ignore */ }
+
+                document.getElementById('totalWaitlist').innerText = data.totalWaitlist;
+
+                if (data.location && data.time) {
+                    document.getElementById('gameDate').innerText = data.formattedDate || data.date;
+                    document.getElementById('gameLocationTime').innerText = `${data.location} | ${data.time}`;
+                }
+
+                const list = document.getElementById('waitlistList');
+                list.innerHTML = '';
+
+                if (!data.waitlist || data.waitlist.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🏒</div>
+                            <p>No one on the waitlist yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                data.waitlist.forEach((player, index) => {
+                    console.log('Creating waitlist item for player:', player);
+                    const li = document.createElement('li');
+                    li.className = 'waitlist-item';
+                    const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+
+                    // Build the inner HTML
+                    let html = `
+                        <div class="position-number">${player.position}</div>
+                        <div class="player-info">
+                            <div class="player-name">${player.fullName} ${goalieBadge}</div>
+                        </div>
+                    `;
+
+                    // Add cancel button if allowed
+                    if (player.canCancel !== false && !rosterReleased) {
+                        html += `<button type="button" class="cancel-btn" data-player-id="${player.id}">Cancel</button>`;
+                    }
+
+                    li.innerHTML = html;
+
+                    // Attach event listener to the cancel button
+                    const btn = li.querySelector('.cancel-btn');
+                    if (btn) {
+                        console.log('Attaching click listener to cancel button for player:', player.id);
+                        btn.onclick = function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Cancel button clicked for player:', player);
+                            openCancelModal(player);
+                        };
+                    }
+
+                    list.appendChild(li);
+                });
+
+            } catch (err) {
+                console.error('Error loading waitlist', err);
+            }
+        }
+
+        // Event listeners for modal buttons
+        document.getElementById('confirmCancelBtn').addEventListener('click', confirmCancel);
+        document.getElementById('abortCancelBtn').addEventListener('click', closeCancelModal);
+        document.getElementById('cancelPhoneInput').addEventListener('input', normalizeCancelPhoneInput);
+        document.getElementById('cancelModal').addEventListener('click', function(e) {
+            if (e.target === this) closeCancelModal();
+        });
+
+        // Load waitlist on page load
+        loadWaitlist();
+        setInterval(loadWaitlist, 30000);
+    </script>
+
+</body>
+</html>
