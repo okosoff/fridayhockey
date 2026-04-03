@@ -1457,6 +1457,12 @@
                 <small>This banner is separate from maintenance mode and will not shut down signup.</small>
             </div>
 
+            <div class="message-box">
+                <label for="paymentEmail">Dynamic Payment E-transfer Email</label>
+                <input type="email" id="paymentEmail" placeholder="okosoff@outlook.com">
+                <small>Used automatically when roster is released to build the payment reminder banner.</small>
+            </div>
+
             <div class="message-grid">
                 <div class="message-box">
                     <label for="announcementImageUpload">Upload Announcement Picture</label>
@@ -1664,63 +1670,6 @@
             </div>
         </div>
 
-        <!-- Released Roster Preview -->
-        <div class="released-roster-preview" id="releasedRosterPreview">
-            <div class="preview-header">
-                <h3>🏒 Released Roster</h3>
-                <p id="previewGameInfo">--</p>
-            </div>
-            <div class="preview-teams">
-                <div class="preview-team white">
-                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
-                    <ul class="preview-list" id="whiteTeamPreview"></ul>
-                </div>
-                <div class="preview-team dark">
-                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
-                    <ul class="preview-list" id="darkTeamPreview"></ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Payment Summary -->
-        <div class="payment-summary-box">
-            <h3>💰 Payment Summary (Admin Only)</h3>
-            <div class="payment-stats">
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
-                    <div class="payment-stat-label">Total Collected</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
-                    <div class="payment-stat-label">Paid Players</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
-                    <div class="payment-stat-label">Unpaid Players</div>
-                </div>
-            </div>
-            <button class="export-btn" onclick="exportToExcel()">
-                📥 Download Full Payment Report (CSV)
-            </button>
-            <div class="message-actions" style="margin-top:12px;">
-                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
-                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
-            </div>
-            <div class="message-box" style="margin-top:12px;">
-                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
-                <div class="control-row">
-                    <select id="paymentReportSnapshotSelect" style="flex:1;">
-                        <option value="">No saved reports loaded</option>
-                    </select>
-                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
-                </div>
-                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
-            </div>
-            <p class="security-notice">
-                ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
-            </p>
-        </div>
-
         <!-- Pre-defined Goalies Section - AUTO ADD -->
         <div class="goalies-section">
             <h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
@@ -1867,6 +1816,65 @@
             </thead>
             <tbody id="playerList"></tbody>
         </table>
+
+        <!-- Payment Summary -->
+        <div class="payment-summary-box">
+            <h3>💰 Payment Summary (Admin Only)</h3>
+            <div class="payment-stats">
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
+                    <div class="payment-stat-label">Total Collected</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
+                    <div class="payment-stat-label">Paid Players</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
+                    <div class="payment-stat-label">Unpaid Players</div>
+                </div>
+            </div>
+            <button class="export-btn" onclick="exportToExcel()">
+                📥 Download Full Payment Report (CSV)
+            </button>
+            <div class="message-actions" style="margin-top:12px;">
+                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
+                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
+            </div>
+            <div class="message-box" style="margin-top:12px;">
+                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
+                <div class="control-row">
+                    <select id="paymentReportSnapshotSelect" style="flex:1;">
+                        <option value="">No saved reports loaded</option>
+                    </select>
+                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
+                </div>
+                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
+            </div>
+            <p class="security-notice">
+                ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
+            </p>
+        </div>
+
+
+        <!-- Released Roster Preview -->
+        <div class="released-roster-preview" id="releasedRosterPreview">
+            <div class="preview-header">
+                <h3>🏒 Released Roster</h3>
+                <p id="previewGameInfo">--</p>
+            </div>
+            <div class="preview-teams">
+                <div class="preview-team white">
+                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
+                    <ul class="preview-list" id="whiteTeamPreview"></ul>
+                </div>
+                <div class="preview-team dark">
+                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
+                    <ul class="preview-list" id="darkTeamPreview"></ul>
+                </div>
+            </div>
+        </div>
+
 
         <div class="waitlist-section">
             <h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
@@ -2664,7 +2672,8 @@
                 const announcementCheckbox = document.getElementById('announcementCheckbox');
                 const announcementStatus = document.getElementById('announcementStatus');
                 const announcementText = document.getElementById('announcementText');
-                                const announcementImagePreview = document.getElementById('announcementImagePreview');
+                const paymentEmail = document.getElementById('paymentEmail');
+                const announcementImagePreview = document.getElementById('announcementImagePreview');
 
                 if (announcementCheckbox) {
                     announcementCheckbox.checked = !!data.announcementEnabled;
@@ -2675,6 +2684,9 @@
                 }
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
+                }
+                if (paymentEmail) {
+                    paymentEmail.value = data.paymentEmail || '';
                 }
                 if (announcementImagePreview) {
                     const firstImage = Array.isArray(data.announcementImages) && data.announcementImages.length ? data.announcementImages[0] : '';
@@ -3574,13 +3586,15 @@
                         const goalieBadge = item.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const typeBadge = item.action === 'removed'
                             ? '<span class="cancelled-badge">ADMIN REMOVED</span>'
-                            : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
+                            : item.action === 'late_cancel_no_show_owed'
+                                ? '<span class="cancelled-badge" style="background:#ff4444;">NO-SHOW OWES</span>'
+                                : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
                         const when = item.cancelledAt ? new Date(item.cancelledAt).toLocaleString() : '--';
                         tr.innerHTML = `
                             <td>${item.firstName || ''} ${item.lastName || ''} ${goalieBadge}</td>
                             <td>${item.source || '--'}</td>
                             <td>${typeBadge}</td>
-                            <td>${item.phone || '--'}</td>
+                            <td>${item.phone || '--'}${item.notes ? `<div style="color:#ffb366; font-size:0.75rem; margin-top:4px;">${item.notes}</div>` : ''}</td>
                             <td>${when}</td>
                         `;
                         cancellationBody.appendChild(tr);
@@ -4132,9 +4146,11 @@
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
                 const text = document.getElementById('announcementText');
+                const paymentEmailInput = document.getElementById('paymentEmail');
                 const checkboxEnabled = !!(checkbox && checkbox.checked);
                 const enabled = checkboxEnabled;
                 const announcementTextValue = text ? text.value.trim() : '';
+                const paymentEmailValue = paymentEmailInput ? paymentEmailInput.value.trim() : '';
                 const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
 
                 try {
@@ -4145,6 +4161,7 @@
                             sessionToken,
                             announcementEnabled: checkboxEnabled,
                             announcementText: announcementTextValue,
+                            paymentEmail: paymentEmailValue,
                             announcementImages
                         })
                     });
