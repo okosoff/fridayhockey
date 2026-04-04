@@ -940,6 +940,20 @@
             margin-top:6px;
         }
 
+        .announcement-copy-email {
+            color: #1f5fbf;
+            font-weight: 800;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .announcement-copy-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: #6b5310;
+        }
+
 </style>
 <base target="_blank">
 </head>
@@ -955,6 +969,7 @@
         <div class="announcement-copy">
             <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
+            <small id="announcementCopyHint" class="announcement-copy-hint" style="display:none;">Tap email to copy</small>
         </div>
     </div>
 
@@ -1189,7 +1204,7 @@
                 </div>
                 
                 <div id="etransferInfo" style="background: #222; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px;">
-                    Send $15 to: <strong>okosoff@outlook.com</strong><br>
+                    Send $15 to: <strong id="paymentEmailDisplay">E-transfer email to be announced</strong><br>
                     <span style="color: var(--accent);">* E-Transfer payment must be received before stepping on the ice *</span>
                 </div>
 
@@ -1693,27 +1708,86 @@ function updateCalculatedRating() {
 
 
 
+        function copyTextToClipboard(text) {
+            const value = String(text || '').trim();
+            if (!value) return;
+
+            const onCopied = () => {
+                const hintEl = document.getElementById('announcementCopyHint');
+                if (!hintEl) return;
+                hintEl.textContent = 'Copied payment email';
+                hintEl.style.display = 'block';
+                setTimeout(() => {
+                    hintEl.textContent = 'Tap email to copy';
+                }, 1600);
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(onCopied).catch(() => {
+                    window.prompt('Copy payment email:', value);
+                });
+                return;
+            }
+
+            window.prompt('Copy payment email:', value);
+        }
+
         function renderAnnouncement(data) {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
+            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const enabled = !!data.announcementEnabled;
             const text = (data.announcementText || '').trim();
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             const image = images.length ? String(images[0] || '').trim() : '';
+            const email = String(data.paymentEmail || '').trim();
             const shouldShow = enabled && (!!text || !!image);
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
                 textEl.textContent = '';
+                textEl.onclick = null;
+                textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
+                if (hintEl) {
+                    hintEl.style.display = 'none';
+                    hintEl.textContent = 'Tap email to copy';
+                }
                 return;
             }
 
-            textEl.textContent = text || 'Attention';
+            const emailIndex = email ? text.toLowerCase().indexOf(email.toLowerCase()) : -1;
+            if (email && emailIndex !== -1) {
+                const before = text.slice(0, emailIndex);
+                const matchedEmail = text.slice(emailIndex, emailIndex + email.length);
+                const after = text.slice(emailIndex + email.length);
+                const escapeHtml = (value) => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeEmail = escapeHtml(matchedEmail);
+                textEl.innerHTML = `${escapeHtml(before)}<span class="announcement-copy-email" data-copy-payment-email="${safeEmail}">${safeEmail}</span>${escapeHtml(after)}`;
+                const copyTarget = textEl.querySelector('[data-copy-payment-email]');
+                if (copyTarget) {
+                    copyTarget.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        copyTextToClipboard(email);
+                    });
+                }
+                if (hintEl) {
+                    hintEl.style.display = 'block';
+                    hintEl.textContent = 'Tap email to copy';
+                }
+            } else {
+                textEl.textContent = text || 'Attention';
+                if (hintEl) {
+                    hintEl.style.display = 'none';
+                    hintEl.textContent = 'Tap email to copy';
+                }
+            }
+
             if (image) {
                 thumbEl.src = image;
                 thumbEl.classList.add('visible');
@@ -1832,6 +1906,11 @@ function updateCalculatedRating() {
                 }
 
                 renderAnnouncement(data);
+
+                const paymentEmailDisplay = document.getElementById('paymentEmailDisplay');
+                if (paymentEmailDisplay) {
+                    paymentEmailDisplay.textContent = data.paymentEmail || 'E-transfer email to be announced';
+                }
 
                 // Update dynamic title
                 if (data.customTitle) {

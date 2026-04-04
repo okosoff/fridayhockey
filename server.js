@@ -511,8 +511,14 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
 function buildRosterReleasePaymentAnnouncement() {
     const email = String(paymentEmail || '').trim();
     return email
-        ? `E-transfer required immediately after roster release to ${email}.`
-        : 'E-transfer required immediately after roster release.';
+        ? `Payments must be received prior to stepping on the ice. E-transfer to ${email}.`
+        : 'Payments must be received prior to stepping on the ice.';
+}
+
+function clearAnnouncementState() {
+    announcementEnabled = false;
+    announcementText = '';
+    announcementImages = [];
 }
 
 // --- BACKUP GOALIES FOR SUBSTITUTION ---
@@ -573,7 +579,7 @@ let customTitle = `Phan's ${getGameDayName()} Hockey`;
 let announcementEnabled = false;
 let announcementText = '';
 let announcementImages = [];
-let paymentEmail = 'okosoff@outlook.com';
+let paymentEmail = String(process.env.PAYMENT_EMAIL || '').trim();
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -1251,6 +1257,7 @@ async function checkWeeklyReset() {
     manualOverrideState = null;
     requirePlayerCode = true;
     maintenanceMode = false;
+    clearAnnouncementState();
     refreshDynamicSignupCode();
 
     // Keep weekly schedules intact
@@ -4647,6 +4654,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     requirePlayerCode = true;
     lastExactResetRunAt = '';
     lastExactRosterReleaseRunAt = '';
+    clearAnnouncementState();
 
     try {
         if (pool) {
