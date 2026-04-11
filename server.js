@@ -1519,6 +1519,17 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_adjustment NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN rating TYPE NUMERIC(4,1) USING CASE WHEN rating IS NULL THEN NULL ELSE rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN skating_rating TYPE NUMERIC(4,1) USING CASE WHEN skating_rating IS NULL THEN NULL ELSE skating_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN puck_skills_rating TYPE NUMERIC(4,1) USING CASE WHEN puck_skills_rating IS NULL THEN NULL ELSE puck_skills_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN hockey_sense_rating TYPE NUMERIC(4,1) USING CASE WHEN hockey_sense_rating IS NULL THEN NULL ELSE hockey_sense_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN conditioning_rating TYPE NUMERIC(4,1) USING CASE WHEN conditioning_rating IS NULL THEN NULL ELSE conditioning_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN effort_rating TYPE NUMERIC(4,1) USING CASE WHEN effort_rating IS NULL THEN NULL ELSE effort_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN self_rating_raw TYPE NUMERIC(4,1) USING CASE WHEN self_rating_raw IS NULL THEN NULL ELSE self_rating_raw::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN derived_rating TYPE NUMERIC(4,1) USING CASE WHEN derived_rating IS NULL THEN NULL ELSE derived_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN admin_rating TYPE NUMERIC(4,1) USING CASE WHEN admin_rating IS NULL THEN NULL ELSE admin_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN admin_adjustment TYPE NUMERIC(4,1) USING CASE WHEN admin_adjustment IS NULL THEN NULL ELSE admin_adjustment::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE players ALTER COLUMN final_rating TYPE NUMERIC(4,1) USING CASE WHEN final_rating IS NULL THEN NULL ELSE final_rating::numeric(4,1) END`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS waitlist (
@@ -1554,6 +1565,15 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS self_rating_raw NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS derived_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN rating TYPE NUMERIC(4,1) USING CASE WHEN rating IS NULL THEN NULL ELSE rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN skating_rating TYPE NUMERIC(4,1) USING CASE WHEN skating_rating IS NULL THEN NULL ELSE skating_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN puck_skills_rating TYPE NUMERIC(4,1) USING CASE WHEN puck_skills_rating IS NULL THEN NULL ELSE puck_skills_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN hockey_sense_rating TYPE NUMERIC(4,1) USING CASE WHEN hockey_sense_rating IS NULL THEN NULL ELSE hockey_sense_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN conditioning_rating TYPE NUMERIC(4,1) USING CASE WHEN conditioning_rating IS NULL THEN NULL ELSE conditioning_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN effort_rating TYPE NUMERIC(4,1) USING CASE WHEN effort_rating IS NULL THEN NULL ELSE effort_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN self_rating_raw TYPE NUMERIC(4,1) USING CASE WHEN self_rating_raw IS NULL THEN NULL ELSE self_rating_raw::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN derived_rating TYPE NUMERIC(4,1) USING CASE WHEN derived_rating IS NULL THEN NULL ELSE derived_rating::numeric(4,1) END`);
+        await pool.query(`ALTER TABLE waitlist ALTER COLUMN final_rating TYPE NUMERIC(4,1) USING CASE WHEN final_rating IS NULL THEN NULL ELSE final_rating::numeric(4,1) END`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS history (
@@ -1570,6 +1590,8 @@ async function initDatabase() {
                 dark_avg NUMERIC(3,1)
             )
         `);
+        await pool.query(`ALTER TABLE history ALTER COLUMN white_avg TYPE NUMERIC(3,1) USING CASE WHEN white_avg IS NULL THEN NULL ELSE white_avg::numeric(3,1) END`);
+        await pool.query(`ALTER TABLE history ALTER COLUMN dark_avg TYPE NUMERIC(3,1) USING CASE WHEN dark_avg IS NULL THEN NULL ELSE dark_avg::numeric(3,1) END`);
         
         // ============================================
         // ADD THIS NEW TABLE FOR APP SETTINGS
@@ -1795,7 +1817,7 @@ const REQUEST_SNAPSHOT_ENABLED = String(process.env.REQUEST_SNAPSHOT_ENABLED || 
 const REQUEST_SNAPSHOT_MIN_INTERVAL_MS = Number(process.env.REQUEST_SNAPSHOT_MIN_INTERVAL_MS || 60000);
 const REQUEST_SELF_HEAL_ENABLED = String(process.env.REQUEST_SELF_HEAL_ENABLED || 'false').toLowerCase() === 'true';
 const REQUEST_SELF_HEAL_MIN_INTERVAL_MS = Number(process.env.REQUEST_SELF_HEAL_MIN_INTERVAL_MS || 300000);
-const DATA_AUDIT_RECENT_LIMIT = Number(process.env.DATA_AUDIT_RECENT_LIMIT || 25);
+const DATA_DATA_AUDIT_RECENT_LIMIT = Number(process.env.DATA_DATA_AUDIT_RECENT_LIMIT || 25);
 const DATA_AUDIT_RETENTION_DAYS = Number(process.env.DATA_AUDIT_RETENTION_DAYS || 14);
 const DATA_AUDIT_MAX_ROWS = Number(process.env.DATA_AUDIT_MAX_ROWS || 5000);
 const DATA_AUDIT_PRUNE_INTERVAL_MS = Number(process.env.DATA_AUDIT_PRUNE_INTERVAL_MS || 21600000);
@@ -3624,8 +3646,8 @@ async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
             paymentMethod: p.paymentMethod
         }));
         
-        const whiteAvg = (whiteTeam.reduce((sum, p) => sum + (parseInt(p.rating) || 0), 0) / whiteTeam.length).toFixed(1);
-        const darkAvg = (darkTeam.reduce((sum, p) => sum + (parseInt(p.rating) || 0), 0) / darkTeam.length).toFixed(1);
+        const whiteAvg = Number((whiteTeam.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0) / Math.max(whiteTeam.length, 1)).toFixed(1));
+        const darkAvg = Number((darkTeam.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0) / Math.max(darkTeam.length, 1)).toFixed(1));
         
         await pool.query(
             `INSERT INTO history (week_number, year, release_date, game_location, game_time, game_date, white_team, dark_team, white_avg, dark_avg)
