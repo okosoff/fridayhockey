@@ -744,7 +744,10 @@
 
         .maintenance-toggle {
             position: relative;
-            display: block;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
         }
 
         .maintenance-checkbox {
@@ -754,11 +757,13 @@
         }
 
         .maintenance-label {
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: fit-content;
+            width: auto;
             min-width: 260px;
+            max-width: 100%;
+            margin: 0 auto;
             padding: 14px 22px;
             border-radius: 999px;
             font-size: 1.15rem;
@@ -2169,6 +2174,10 @@ th, td{padding:2px 3px !important;}
     line-height:1.1 !important;
 }
 #adminPanel > .maintenance-control .maintenance-toggle{
+    display:flex !important;
+    justify-content:center !important;
+    align-items:center !important;
+    width:100% !important;
     padding:8px 10px !important;
     gap:10px !important;
     border-radius:9px !important;
@@ -2182,6 +2191,10 @@ th, td{padding:2px 3px !important;}
     font-size:16px !important;
 }
 #adminPanel > .maintenance-control .maintenance-label{
+    display:inline-flex !important;
+    width:auto !important;
+    max-width:100% !important;
+    margin:0 auto !important;
     font-size:1rem !important;
     line-height:1.1 !important;
 }
@@ -2202,6 +2215,10 @@ th, td{padding:2px 3px !important;}
         margin-bottom:6px !important;
     }
     #adminPanel > .maintenance-control .maintenance-toggle{
+        display:flex !important;
+        justify-content:center !important;
+        align-items:center !important;
+        width:100% !important;
         padding:7px 8px !important;
         gap:8px !important;
     }
@@ -2210,6 +2227,10 @@ th, td{padding:2px 3px !important;}
         height:22px !important;
     }
     #adminPanel > .maintenance-control .maintenance-label{
+        display:inline-flex !important;
+        width:auto !important;
+        max-width:100% !important;
+        margin:0 auto !important;
         font-size:0.92rem !important;
     }
     #adminPanel > .maintenance-control .maintenance-status{
@@ -2219,6 +2240,26 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
+
+<style id="maintenance-pill-center-fix-v3">
+#adminPanel > .maintenance-control {
+    width: 100% !important;
+}
+#adminPanel > .maintenance-control .maintenance-toggle {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+#adminPanel > .maintenance-control .maintenance-label {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 260px !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+</style>
 </head>
 <body class="admin-layout-option-1">
 
