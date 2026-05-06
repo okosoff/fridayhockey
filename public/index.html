@@ -1591,7 +1591,6 @@
         <div class="announcement-copy">
             <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
-            <small id="announcementCopyHint" class="announcement-copy-hint" style="display:none;">Tap email to copy</small>
         </div>
     </div>
 
@@ -2743,7 +2742,7 @@ function updateCalculatedRating() {
                         const subBadge = player.promotedFromWaitlist
                             ? (isViewer
                                 ? '<span class="you-were-subbed-badge">LATE ADDITION</span>'
-                                : '<span class="subbed-in-badge">SUBBED IN</span>')
+                                : '<span class="subbed-in-badge">LATE ADDITION</span>')
                             : '';
                         const subNote = player.promotedFromWaitlist && player.subbedInForName
                             ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>`
@@ -2769,25 +2768,12 @@ function updateCalculatedRating() {
                 return false;
             }
         }
-
-
-
         function copyTextToClipboard(text) {
             const value = String(text || '').trim();
             if (!value) return;
 
-            const onCopied = () => {
-                const hintEl = document.getElementById('announcementCopyHint');
-                if (!hintEl) return;
-                hintEl.textContent = 'Copied payment email';
-                hintEl.style.display = 'block';
-                setTimeout(() => {
-                    hintEl.textContent = 'Tap email to copy';
-                }, 1600);
-            };
-
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(value).then(onCopied).catch(() => {
+                navigator.clipboard.writeText(value).catch(() => {
                     window.prompt('Copy payment email:', value);
                 });
                 return;
@@ -2800,7 +2786,6 @@ function updateCalculatedRating() {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
-            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const isRosterReleased = !!data.rosterReleased;
@@ -2820,10 +2805,6 @@ function updateCalculatedRating() {
                 textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
-                if (hintEl) {
-                    hintEl.style.display = 'none';
-                    hintEl.textContent = '';
-                }
                 return;
             }
 
@@ -2846,7 +2827,7 @@ function updateCalculatedRating() {
                 .split('{spots}').join(spotsToken);
             const wrapEmails = (safeLine) => safeLine.replace(
                 /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-                (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Tap to copy email">${email}</span>`
+                (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Copy email">${email}</span>`
             );
 
             const html = text
@@ -2880,11 +2861,6 @@ function updateCalculatedRating() {
                     copyTextToClipboard(target.getAttribute('data-copy-email') || target.textContent || '');
                 }
             };
-
-            if (hintEl) {
-                hintEl.style.display = 'none';
-                hintEl.textContent = '';
-            }
 
             if (image) {
                 thumbEl.src = image;

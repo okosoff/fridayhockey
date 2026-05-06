@@ -8463,9 +8463,6 @@ document.addEventListener('keydown', function(e){
 })();
 </script>
 
-</body>
-</html>
-
 <style id="admin-registered-pills-match-waitlist-mobile-v1">
 @media (max-width:600px){
     /* Match registered-player pills/badges to waitlist pill sizing on Android/mobile */
@@ -8525,3 +8522,77 @@ document.addEventListener('keydown', function(e){
     }
 }
 </style>
+
+<style id="admin-mobile-stabilizer-final-v1">
+/* Final mobile/admin stabilization: keeps spacing predictable and removes previous patch conflicts. */
+@media (max-width: 700px) {
+    body {
+        padding: 10px !important;
+        align-items: stretch !important;
+    }
+    .container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 12px !important;
+        margin: 0 auto 12px auto !important;
+        border-radius: 12px !important;
+    }
+    .admin-panel {
+        overflow-x: hidden !important;
+    }
+    .control-box,
+    .payment-summary-box,
+    .roster-status,
+    .registered-players-box,
+    .waitlist-section,
+    .cancellations-section,
+    .snapshot-pro-section,
+    .game-setup-section,
+    .compact-announcement-control,
+    .announcement-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 0 12px 0 !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+    }
+    table {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-spacing: 0 !important;
+        table-layout: fixed !important;
+    }
+    th, td {
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        padding: 4px 3px !important;
+        font-size: 0.72rem !important;
+        vertical-align: middle !important;
+    }
+    #playerList .player-name-cell,
+    #waitlistList .player-name-cell {
+        align-items: flex-start !important;
+        text-align: left !important;
+        line-height: 1.08 !important;
+    }
+    .rating-wrap, .paid-wrap, .waitlist-action-wrap {
+        gap: 2px !important;
+        justify-content: center !important;
+    }
+    .message-grid,
+    .compact-announcement-control .announcement-compact-grid,
+    .game-setup-grid,
+    .form-row,
+    .payment-stats {
+        grid-template-columns: 1fr !important;
+    }
+    button, .control-btn, .logout-btn, .remove-btn, .promote-btn {
+        min-height: 30px !important;
+        line-height: 1.1 !important;
+    }
+}
+</style>
+
+</body>
+</html>
