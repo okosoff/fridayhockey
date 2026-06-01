@@ -241,11 +241,12 @@ app.use(durableMutationGuardMiddleware);
 app.use(schedulerCatchupMiddleware);
 
 // --- DATA STORE ---
-let playerSpots = 20;
+const MAX_SKATERS = 20;
+const MAX_ROSTER_SPOTS = 22;
+let playerSpots = MAX_SKATERS;
 let players = []; 
 let waitlist = [];
 let cancelledRegistrations = [];
-const activeCancellationLocks = new Set();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || crypto.randomBytes(48).toString('hex');
 if (!String(process.env.ADMIN_TOKEN_SECRET || '').trim()) {
@@ -1074,16 +1075,8 @@ function validateResetScheduleAgainstGame(resetAt, selectedGameTime = gameTime) 
         };
     }
 
-    // A weekly reset should happen after that week's game, not almost a full week later before the next game.
-    // This blocks stale Friday reset settings such as Friday afternoon/evening for Friday hockey.
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
-    if (minutesAfterGame > maxResetHoursAfterGame * 60) {
-        return {
-            ok: false,
-            reason: `Blocked weekly reset because it is ${Math.round(minutesAfterGame / 60)} hours after the configured game time. Reset must be within ${maxResetHoursAfterGame} hours after ${gamePoint.label}.`
-        };
-    }
-
+    // Reset may be scheduled any time after that game's configured game time.
+    // The separate roster-release and reset-arm checks below still prevent premature or stale resets.
     return { ok: true, reason: `Reset schedule is ${Math.round(minutesAfterGame / 60)} hours after the configured game time.` };
 }
 
@@ -1160,11 +1153,10 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
 
     const gamePoint = getGameSchedulePointFromGameTime(gameTime);
     const minutesAfterLatestGame = minutesSinceLatestWeeklyOccurrence(gamePoint, etTime);
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
-    if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0 || minutesAfterLatestGame > maxResetHoursAfterGame * 60) {
+    if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because it is not within ${maxResetHoursAfterGame} hours after the actual configured game time (${gamePoint.label}).`
+            reason: `Blocked weekly reset because it is before the actual configured game time (${gamePoint.label}).`
         };
     }
 
@@ -1771,7 +1763,7 @@ async function checkWeeklyReset() {
         );
     }
 
-    playerSpots = 20;
+    playerSpots = MAX_SKATERS;
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -2213,7 +2205,7 @@ async function loadDataFromDB() {
         
         // FIX: Recalculate playerSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
-        playerSpots = Math.max(0, 20 - nonGoalieCount);
+        playerSpots = Math.max(0, MAX_SKATERS - nonGoalieCount);
                 
         const waitlistRes = await pool.query('SELECT * FROM waitlist ORDER BY joined_at');
         waitlist = waitlistRes.rows.map(p => hydratePlayerRatingProfile({
@@ -2886,7 +2878,7 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
     }
 
-    playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
+    playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !(p && p.isGoalie)).length);
     await saveData('restore-selected-snapshot');
 
     try {
@@ -3327,7 +3319,7 @@ async function runDatabaseSelfHeal(reason = 'self-heal') {
         for (const player of missingWaitlist) {
             if (!memoryWaitlistKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`)) waitlist.push(hydratePlayerRatingProfile(player));
         }
-        playerSpots = Math.max(0, 20 - players.filter(p => !p.isGoalie).length);
+        playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !p.isGoalie).length);
         const saveResult = await saveData(`self-heal-${reason}`);
         await appendDataAudit('self_heal', saveResult.ok ? 'success' : 'error', {
             reason, sourceFile: best.file, missingPlayers: missingPlayers.length, missingWaitlist: missingWaitlist.length, saveResult
@@ -3468,7 +3460,7 @@ async function reconcileFromFileBackup() {
         }
 
         if (mergedPlayers || mergedWaitlist) {
-            playerSpots = Math.max(0, 20 - players.filter(p => !p.isGoalie).length);
+            playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !p.isGoalie).length);
             console.log(`Reconciled best local snapshot into DB: ${mergedPlayers} players, ${mergedWaitlist} waitlist.`);
             await saveData('reconcile-best-local-snapshot');
         }
@@ -3720,47 +3712,14 @@ function appendCancellationLog(entry) {
         cancelledBy: entry?.cancelledBy || 'player',
         notes: entry?.notes || ''
     };
-
     cancelledRegistrations = Array.isArray(cancelledRegistrations) ? cancelledRegistrations : [];
-
-    // Prevent duplicate cancellation rows from double-clicks, browser retries, or concurrent requests.
-    // Same player/source/action within this short window is treated as the same cancellation event.
-    const duplicateWindowMs = Number(process.env.CANCELLATION_LOG_DUPLICATE_WINDOW_MS || 30000);
-    const normalizedPhone = normalizePhoneDigits(normalized.phone);
-    const normalizedFirst = normalized.firstName.toLowerCase();
-    const normalizedLast = normalized.lastName.toLowerCase();
-    const normalizedSource = String(normalized.source || '').trim().toLowerCase();
-    const normalizedAction = String(normalized.action || '').trim().toLowerCase();
-    const normalizedId = String(normalized.id ?? '').trim();
-    const nowMs = Date.parse(normalized.cancelledAt) || Date.now();
-
-    const duplicate = cancelledRegistrations.find(existing => {
-        const existingTimeMs = Date.parse(existing?.cancelledAt || '') || 0;
-        if (Math.abs(nowMs - existingTimeMs) > duplicateWindowMs) return false;
-
-        const sameSource = String(existing?.source || '').trim().toLowerCase() === normalizedSource;
-        const sameAction = String(existing?.action || '').trim().toLowerCase() === normalizedAction;
-        if (!sameSource || !sameAction) return false;
-
-        const sameId = normalizedId && String(existing?.id ?? '').trim() === normalizedId;
-        const samePhone = normalizedPhone && normalizePhoneDigits(existing?.phone || '') === normalizedPhone;
-        const sameName = normalizedFirst && normalizedLast &&
-            String(existing?.firstName || '').trim().toLowerCase() === normalizedFirst &&
-            String(existing?.lastName || '').trim().toLowerCase() === normalizedLast;
-
-        return sameId || samePhone || sameName;
-    });
-
-    if (duplicate) {
-        return duplicate;
-    }
-
     cancelledRegistrations.unshift(normalized);
     if (cancelledRegistrations.length > 250) {
         cancelledRegistrations = cancelledRegistrations.slice(0, 250);
     }
     return normalized;
 }
+
 function validatePhoneNumber(phone) {
     const cleaned = normalizePhoneDigits(phone);
     return cleaned.length === 10;
@@ -4240,6 +4199,84 @@ function computeTeamBalanceObjective(whiteTeam = [], darkTeam = []) {
     );
 }
 
+
+function getTargetSkaterCounts(totalSkaters) {
+    const total = Math.max(0, Number(totalSkaters) || 0);
+    return {
+        white: Math.ceil(total / 2),
+        dark: Math.floor(total / 2)
+    };
+}
+
+function countSkatersOnTeam(team = []) {
+    return team.filter(p => p && !p.isGoalie).length;
+}
+
+
+function countGoaliesOnTeam(team = []) {
+    return team.filter(p => p && p.isGoalie).length;
+}
+
+function buildRosterTeamRuleValidation(teams = {}) {
+    const whiteTeam = Array.isArray(teams.whiteTeam) ? teams.whiteTeam : [];
+    const darkTeam = Array.isArray(teams.darkTeam) ? teams.darkTeam : [];
+    const whiteSkaters = countSkatersOnTeam(whiteTeam);
+    const darkSkaters = countSkatersOnTeam(darkTeam);
+    const whiteGoalies = countGoaliesOnTeam(whiteTeam);
+    const darkGoalies = countGoaliesOnTeam(darkTeam);
+    const totalSkaters = whiteSkaters + darkSkaters;
+    const totalGoalies = whiteGoalies + darkGoalies;
+    const totalPlayers = totalSkaters + totalGoalies;
+    const problems = [];
+
+    // Skaters must always be as even as mathematically possible.
+    // With an even skater count, teams must have the same number of skaters.
+    // With an odd skater count, one team may only have one extra skater.
+    if (Math.abs(whiteSkaters - darkSkaters) > 1) {
+        problems.push(`Skater count is uneven: White ${whiteSkaters}, Dark ${darkSkaters}.`);
+    }
+    if (totalSkaters % 2 === 0 && whiteSkaters !== darkSkaters) {
+        problems.push(`Even skater count must split evenly: White ${whiteSkaters}, Dark ${darkSkaters}.`);
+    }
+
+    // If two goalies are present, force one goalie per team.
+    if (totalGoalies === 2 && (whiteGoalies !== 1 || darkGoalies !== 1)) {
+        problems.push(`Two-goalie roster must have one goalie per team: White ${whiteGoalies}, Dark ${darkGoalies}.`);
+    }
+
+    // Full-capacity hockey rule: 20 skaters + 2 goalies = 10 skaters and 1 goalie per team.
+    if (totalPlayers === MAX_ROSTER_SPOTS) {
+        if (totalSkaters !== MAX_SKATERS || totalGoalies !== MAX_GOALIES) {
+            problems.push(`Full roster must be ${MAX_SKATERS} skaters and ${MAX_GOALIES} goalies; found ${totalSkaters} skaters and ${totalGoalies} goalies.`);
+        }
+        if (whiteSkaters !== 10 || darkSkaters !== 10 || whiteGoalies !== 1 || darkGoalies !== 1) {
+            problems.push(`Full roster must be White 10 skaters + 1 goalie and Dark 10 skaters + 1 goalie; found White ${whiteSkaters}+${whiteGoalies}, Dark ${darkSkaters}+${darkGoalies}.`);
+        }
+    }
+
+    return {
+        ok: problems.length === 0,
+        problems,
+        totalPlayers,
+        totalSkaters,
+        totalGoalies,
+        whiteSkaters,
+        darkSkaters,
+        whiteGoalies,
+        darkGoalies
+    };
+}
+
+function enforceRosterTeamRules(teams = {}, context = 'roster') {
+    const validation = buildRosterTeamRuleValidation(teams);
+    if (!validation.ok) {
+        const message = `[ROSTER GUARD] ${context}: ${validation.problems.join(' ')}`;
+        console.error(message);
+        throw new Error(message);
+    }
+    return validation;
+}
+
 function generateFairTeams() {
     const sortByBalance = (a, b) => {
         const diff = getPlayerBalanceScore(b) - getPlayerBalanceScore(a);
@@ -4261,6 +4298,7 @@ function generateFairTeams() {
     const assignSkatersAndOptimize = (initialWhite = [], initialDark = [], label = 'default') => {
         let whiteTeam = initialWhite.map(p => ({ ...p, team: 'White' }));
         let darkTeam = initialDark.map(p => ({ ...p, team: 'Dark' }));
+        const targetSkaters = getTargetSkaterCounts(skaters.length);
 
         const tierSize = Math.max(2, Math.min(4, Math.ceil(skaters.length / 5) || 2));
         let snakeLeftToRight = true;
@@ -4271,14 +4309,16 @@ function generateFairTeams() {
 
             tier.forEach((skater, index) => {
                 const preferredTeam = preferredOrder[index % preferredOrder.length];
-                const tryWhite = [...whiteTeam, { ...skater, team: 'White' }];
-                const tryDark = [...darkTeam, { ...skater, team: 'Dark' }];
-                const whiteObjective = computeTeamBalanceObjective(tryWhite, darkTeam) + (preferredTeam === 'White' ? -0.08 : 0);
-                const darkObjective = computeTeamBalanceObjective(whiteTeam, tryDark) + (preferredTeam === 'Dark' ? -0.08 : 0);
+                const canAddWhite = countSkatersOnTeam(whiteTeam) < targetSkaters.white;
+                const canAddDark = countSkatersOnTeam(darkTeam) < targetSkaters.dark;
+                const tryWhite = canAddWhite ? [...whiteTeam, { ...skater, team: 'White' }] : null;
+                const tryDark = canAddDark ? [...darkTeam, { ...skater, team: 'Dark' }] : null;
+                const whiteObjective = tryWhite ? computeTeamBalanceObjective(tryWhite, darkTeam) + (preferredTeam === 'White' ? -0.08 : 0) : Number.POSITIVE_INFINITY;
+                const darkObjective = tryDark ? computeTeamBalanceObjective(whiteTeam, tryDark) + (preferredTeam === 'Dark' ? -0.08 : 0) : Number.POSITIVE_INFINITY;
 
                 if (whiteObjective <= darkObjective) {
                     whiteTeam = tryWhite;
-                } else {
+                } else if (tryDark) {
                     darkTeam = tryDark;
                 }
             });
@@ -4367,7 +4407,14 @@ function generateFairTeams() {
     const darkTeam = best.darkTeam;
     players = [...whiteTeam, ...darkTeam];
 
-    console.log(`[TEAM BALANCE] Selected ${best.label}. White balance ${roundRating(best.whiteMetrics.totalBalance)}, Dark balance ${roundRating(best.darkMetrics.totalBalance)}, objective ${roundRating(best.objective)}.`);
+    const whiteSkaterCount = countSkatersOnTeam(whiteTeam);
+    const darkSkaterCount = countSkatersOnTeam(darkTeam);
+    const whiteGoalieCount = countGoaliesOnTeam(whiteTeam);
+    const darkGoalieCount = countGoaliesOnTeam(darkTeam);
+
+    const rosterRuleValidation = enforceRosterTeamRules({ whiteTeam, darkTeam }, 'generateFairTeams');
+
+    console.log(`[TEAM BALANCE] Selected ${best.label}. White ${whiteSkaterCount} skater(s), ${whiteGoalieCount} goalie(s). Dark ${darkSkaterCount} skater(s), ${darkGoalieCount} goalie(s). White balance ${roundRating(best.whiteMetrics.totalBalance)}, Dark balance ${roundRating(best.darkMetrics.totalBalance)}, objective ${roundRating(best.objective)}.`);
 
     return {
         whiteTeam,
@@ -4377,7 +4424,12 @@ function generateFairTeams() {
         whiteBalance: roundRating(best.whiteMetrics.totalBalance),
         darkBalance: roundRating(best.darkMetrics.totalBalance),
         balanceObjective: roundRating(best.objective),
-        goalieAssignmentMode: best.label
+        goalieAssignmentMode: best.label,
+        whiteSkaterCount,
+        darkSkaterCount,
+        whiteGoalieCount,
+        darkGoalieCount,
+        rosterRuleValidation
     };
 }
 
@@ -5005,6 +5057,8 @@ app.get('/api/status', (req, res) => {
         goalieCount: goalieCount,
         goalieSpotsAvailable: MAX_GOALIES - goalieCount,
         maxGoalies: MAX_GOALIES,
+        maxSkaters: MAX_SKATERS,
+        maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         isFull: playerSpots === 0,
         waitlistCount: waitlist.length,
@@ -5506,14 +5560,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         return res.status(401).json({ error: "Phone number does not match registration." });
     }
 
-    const cancellationLockKey = `${foundSource}:${String(foundPlayer.id).trim()}:${storedPhone}`;
-    if (activeCancellationLocks.has(cancellationLockKey)) {
-        return res.status(409).json({
-            error: "Cancellation is already being processed. Please wait a moment and refresh.",
-            duplicateRequest: true
-        });
-    }
-
     const cancellationTiming = getCancellationTimingStatus();
     const isLateCancelWindow = foundSource === 'players' && !!cancellationTiming.isLateCancelWindow;
 
@@ -5531,7 +5577,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
     if (playerIndex !== -1) {
         const player = players[playerIndex];
         let promotedPlayer = null;
-        activeCancellationLocks.add(cancellationLockKey);
 
         try {
             await runProtectedMutation('player-cancel', req, async () => {
@@ -5550,11 +5595,11 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                 });
 
                 players.splice(playerIndex, 1);
-                playerSpots++;
+                if (!player.isGoalie) playerSpots = Math.min(MAX_SKATERS, playerSpots + 1);
 
                 const removedPlayerTeam = player.team === 'White' || player.team === 'Dark' ? player.team : null;
                 const rosterWasReleased = getEffectiveRosterReleasedState();
-                const waitlistPlayer = extractWaitlistPlayerToPromote();
+                const waitlistPlayer = extractWaitlistPlayerToPromote({ preferGoalie: !!player.isGoalie });
                 if (waitlistPlayer) {
                     const assignedTeam = rosterWasReleased && removedPlayerTeam ? removedPlayerTeam : null;
 
@@ -5567,7 +5612,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                     });
 
                     players.push(promotedPlayer);
-                    playerSpots--;
+                    if (!promotedPlayer.isGoalie) playerSpots = Math.max(0, playerSpots - 1);
 
                     if (rosterWasReleased) {
                         rebalanceReleasedRoster('player-cancel-waitlist-auto-promotion');
@@ -5582,8 +5627,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         } catch (err) {
             console.error('Error cancelling registration:', err.message);
             return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
-        } finally {
-            activeCancellationLocks.delete(cancellationLockKey);
         }
 
         return res.json({
@@ -5603,7 +5646,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
 
     if (waitlistIndex !== -1) {
         const waitlistPlayer = waitlist[waitlistIndex];
-        activeCancellationLocks.add(cancellationLockKey);
 
         try {
             await runProtectedMutation('waitlist-cancel', req, async () => {
@@ -5629,8 +5671,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         } catch (err) {
             console.error('Error cancelling waitlist registration:', err.message);
             return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
-        } finally {
-            activeCancellationLocks.delete(cancellationLockKey);
         }
 
         return res.json({
@@ -6044,6 +6084,8 @@ app.post('/api/admin/players-full', (req, res) => {
         playerCount,
         goalieCount,
         maxGoalies: MAX_GOALIES,
+        maxSkaters: MAX_SKATERS,
+        maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
         paidCount: paidCount,
@@ -6400,7 +6442,7 @@ app.post('/api/admin/restore-backup', async (req, res) => {
         }
 
         // Always recalculate spots from the resulting live roster instead of trusting backup counts.
-        playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
+        playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !(p && p.isGoalie)).length);
 
         // Persist using existing save helper if available
         try {
@@ -6469,6 +6511,8 @@ app.post('/api/admin/players', (req, res) => {
         playerCount,
         goalieCount,
         maxGoalies: MAX_GOALIES,
+        maxSkaters: MAX_SKATERS,
+        maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
         paidCount,
@@ -6853,7 +6897,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
         await runProtectedMutation('promote-waitlist', req, async () => {
             waitlist.splice(index, 1);
             players.push(newPlayer);
-            if (!player.isGoalie && playerSpots > 0) playerSpots--;
+            if (!player.isGoalie) playerSpots = Math.max(0, playerSpots - 1);
             if (rosterReleased) {
                 rebalanceReleasedRoster('admin-promote-waitlist');
             }
@@ -6906,6 +6950,7 @@ app.post('/api/admin/add-player', async (req, res) => {
         return res.json({ success: true, player: waitlistPlayer, inWaitlist: true });
     }
     if (isGoalieBool && !isGoalieSpotsAvailable()) return res.status(400).json({ error: "Goalie spots are full (maximum 2)." });
+    if (!isGoalieBool && playerSpots <= 0) return res.status(400).json({ error: "Skater spots are full (maximum 20 skaters). Add this player to the waitlist instead." });
     const nowIso = new Date().toISOString();
     const isLateRosterAddition = !!(rosterReleased && teamForLateAdd);
     const newPlayer = hydratePlayerRatingProfile({
@@ -6929,7 +6974,7 @@ app.post('/api/admin/add-player', async (req, res) => {
         subbedInAt: isLateRosterAddition ? nowIso : null
     });
     applyPersistentAdminRating(newPlayer);
-    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool && playerSpots > 0) playerSpots--; if (rosterReleased) rebalanceReleasedRoster('admin-add-player-after-release'); }, { playerId: newPlayer.id, rosterReleased, assignTeam: teamForLateAdd }); }
+    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool) playerSpots = Math.max(0, playerSpots - 1); if (rosterReleased) rebalanceReleasedRoster('admin-add-player-after-release'); }, { playerId: newPlayer.id, rosterReleased, assignTeam: teamForLateAdd }); }
     catch (err) { console.error('Error adding player:', err); return res.status(500).json({ error: "Failed to add player safely" }); }
     res.json({ success: true, player: newPlayer, inWaitlist: false, assignTeam: teamForLateAdd, rosterReleased });
 });
@@ -6948,7 +6993,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
         await runProtectedMutation('remove-player', req, async () => {
             const removedPlayer = players.splice(index, 1)[0];
             appendCancellationLog({ id: removedPlayer.id, firstName: removedPlayer.firstName, lastName: removedPlayer.lastName, phone: removedPlayer.phone, rating: removedPlayer.rating, isGoalie: removedPlayer.isGoalie, paymentMethod: removedPlayer.paymentMethod, source: 'players', action: 'removed', cancelledBy: 'admin', cancelledAt: new Date().toISOString() });
-            if (!removedPlayer.isGoalie) playerSpots++;
+            if (!removedPlayer.isGoalie) playerSpots = Math.min(MAX_SKATERS, playerSpots + 1);
 
             if (rosterReleased) {
                 const replacement = extractWaitlistPlayerToPromote({ preferGoalie: !!removedPlayer.isGoalie });
@@ -6965,7 +7010,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
                         }
                     );
                     players.push(autoPromotedPlayer);
-                    if (!autoPromotedPlayer.isGoalie && playerSpots > 0) playerSpots--;
+                    if (!autoPromotedPlayer.isGoalie) playerSpots = Math.max(0, playerSpots - 1);
                 }
                 rebalanceReleasedRoster(autoPromotedPlayer ? 'admin-remove-player-waitlist-auto-promotion' : 'admin-remove-player-open-spot');
             }
@@ -7222,7 +7267,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         await runProtectedMutation('manual-reset', req, async () => {
             // Preserve all active admin-adjusted ratings before clearing the weekly roster.
             rememberCurrentAdminRatings();
-            playerSpots = 20; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
