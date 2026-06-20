@@ -7827,9 +7827,35 @@ function formatSmsPhone(phone) {
     return digits ? `+1${digits}` : '';
 }
 
-function buildGoalieInText(goalie = {}) {
+function getPublicBaseUrl(req = null) {
+    const envUrl = String(
+        process.env.PUBLIC_BASE_URL ||
+        process.env.APP_BASE_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        ''
+    ).trim().replace(/\/+$/, '');
+
+    if (envUrl) return envUrl;
+
+    const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').split(',')[0].trim();
+    const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
+    const proto = forwardedProto || req?.protocol || 'https';
+    const host = forwardedHost || (typeof req?.get === 'function' ? req.get('host') : '') || String(req?.headers?.host || '').trim();
+
+    return host ? `${proto}://${host}` : '';
+}
+
+function buildGoalieInText(goalie = {}, req = null) {
+    const firstName = String(goalie.firstName || '').trim();
     const name = `${goalie.firstName || ''} ${goalie.lastName || ''}`.trim() || 'Goalie';
-    return `${name}, you're in for ${gameTime || 'hockey'} at ${gameLocation || 'the rink'}. Please confirm you can make it.`;
+    const greeting = firstName ? `Hi ${firstName},` : `Hi ${name},`;
+    const portalUrl = getPublicBaseUrl(req);
+
+    if (portalUrl) {
+        return `${greeting} you're in. Check ${portalUrl} for details.`;
+    }
+
+    return `${greeting} you're in. Check the Hockey Portal for details.`;
 }
 
 function createGoalieSessionToken(rememberMe = true) {
@@ -7901,10 +7927,23 @@ function getCurrentGoalieContacts() {
     return Array.from(map.values()).sort(sortGoalieContacts);
 }
 
+function isCurrentlyRegisteredGoalieContact(goalie = {}) {
+    const targetPhone = normalizePhoneDigits(goalie.phone || '');
+    const targetName = `${goalie.firstName || ''} ${goalie.lastName || ''}`.trim().toLowerCase();
+
+    return (Array.isArray(players) ? players : []).some(player => {
+        if (!player || !player.isGoalie) return false;
+        const playerPhone = normalizePhoneDigits(player.phone || '');
+        const playerName = `${player.firstName || ''} ${player.lastName || ''}`.trim().toLowerCase();
+        return (targetPhone && playerPhone === targetPhone) || (!!targetName && playerName === targetName);
+    });
+}
+
 function getRegularGoalieContacts() {
     const list = [];
     for (const [day, goalies] of Object.entries(REGULAR_GOALIES_BY_DAY || {})) {
         for (const goalie of (Array.isArray(goalies) ? goalies : [])) {
+            if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
             list.push({
                 ...goalie,
                 dayLabel: `${day.charAt(0).toUpperCase()}${day.slice(1)} regular goalie`
@@ -7917,9 +7956,11 @@ function getRegularGoalieContacts() {
 function getBackupGoalieContacts() {
     const map = new Map();
     for (const goalie of BACKUP_GOALIES || []) {
+        if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
         addUniqueGoalieContact(map, goalie, { note: 'Backup / substitute goalie' });
     }
     for (const goalie of extraGoalieContacts || []) {
+        if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
         const key = normalizeGoalieContactKey(goalie);
         // Saved admin/goalie-panel records override the built-in backup defaults by phone/name.
         if (key && map.has(key)) map.delete(key);
@@ -7990,51 +8031,13 @@ app.post('/api/goalies/add-contact', async (req, res) => {
 
 app.post('/api/goalies/cancel', async (req, res) => {
     if (!requireGoalieAuth(req, res)) return;
-    const cancelGoalieId = String(req.body?.cancelGoalieId || '').trim();
-    if (!cancelGoalieId) return res.status(400).json({ error: 'Select the goalie who is cancelling.' });
 
-    const goalieIndex = players.findIndex(p => String(p.id) === cancelGoalieId && !!p.isGoalie);
-    if (goalieIndex === -1) return res.status(404).json({ error: 'Registered goalie not found.' });
-
-    const cancellingGoalie = players[goalieIndex];
-
-    const nowIso = new Date().toISOString();
-    const rosterWasReleased = getEffectiveRosterReleasedState();
-    const cancelledTeam = cancellingGoalie.team === 'White' || cancellingGoalie.team === 'Dark' ? cancellingGoalie.team : null;
-
-    try {
-        await runProtectedMutation('goalie-self-cancel-immediate', req, async () => {
-            appendCancellationLog({
-                id: cancellingGoalie.id,
-                firstName: cancellingGoalie.firstName,
-                lastName: cancellingGoalie.lastName,
-                phone: cancellingGoalie.phone,
-                rating: cancellingGoalie.rating,
-                isGoalie: true,
-                paymentMethod: cancellingGoalie.paymentMethod,
-                source: 'players',
-                action: 'goalie-self-cancel-immediate',
-                cancelledBy: 'goalie-panel',
-                cancelledAt: nowIso
-            });
-
-            players.splice(goalieIndex, 1);
-
-            if (rosterWasReleased) {
-                syncCurrentWeekTeamsFromPlayers();
-            }
-        }, { cancelledGoalieId: cancellingGoalie.id, rosterWasReleased, cancelledTeam });
-    } catch (err) {
-        console.error('Error cancelling goalie immediately:', err.message);
-        return res.status(500).json({ error: 'Goalie cancellation could not be saved safely.' });
-    }
-
-    res.json({
-        success: true,
-        cancelledGoalie: { firstName: cancellingGoalie.firstName, lastName: cancellingGoalie.lastName, team: cancelledTeam },
-        rosterReleased: rosterWasReleased,
-        currentGoalies: getCurrentGoalieContacts(),
-        backupGoalies: getBackupGoalieContacts()
+    // Goalie panel rule:
+    // There must always be 2 registered goalies.
+    // Do not allow "cancel only" from the goalie panel. Use /api/goalies/substitute
+    // so the cancelling goalie is removed and the replacement goalie is added in one safe mutation.
+    return res.status(400).json({
+        error: 'Goalies cannot be cancelled without a replacement. Two goalies are required at all times. Please select a substitute goalie and use Cancel + Sub In.'
     });
 });
 
@@ -8055,7 +8058,7 @@ app.post('/api/goalies/substitute', async (req, res) => {
 
     const substitutePhone = normalizePhoneDigits(substitute.phone);
     const duplicate = players.find(p => normalizePhoneDigits(p.phone) === substitutePhone && String(p.id) !== cancelGoalieId);
-    if (duplicate) return res.status(400).json({ error: 'That substitute is already registered.' });
+    if (duplicate) return res.status(400).json({ error: 'That substitute is already registered as a goalie/player. Select a goalie who is not currently registered.' });
 
     let newGoalie = null;
     const nowIso = new Date().toISOString();
@@ -8122,7 +8125,7 @@ app.post('/api/goalies/substitute', async (req, res) => {
         return res.status(500).json({ error: 'Goalie substitution could not be saved safely.' });
     }
 
-    const smsBody = buildGoalieInText(newGoalie);
+    const smsBody = buildGoalieInText(newGoalie, req);
     const smsPhone = formatSmsPhone(newGoalie.phone);
     const smsLink = smsPhone ? `sms:${smsPhone}?&body=${encodeURIComponent(smsBody)}` : '';
     res.json({
