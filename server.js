@@ -7811,16 +7811,7 @@ function requirePaymentAuth(req, res) {
 
 // GOALIE CONTACT PAGE: private access for substitute goalie contacts
 const GOALIE_PASSWORD = String(process.env.GOALIE_PASSWORD || '').trim();
-const EXTRA_GOALIE_CONTACTS = [
-    {
-        firstName: "Lilly",
-        priority: 3,
-        lastName: "Isberg",
-        phone: "(289) 808-4633",
-        rating: 7,
-        note: "Quick goalie contact"
-    }
-];
+const EXTRA_GOALIE_CONTACTS = [];
 
 let extraGoalieContacts = EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
 
