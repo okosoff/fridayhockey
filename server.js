@@ -5871,7 +5871,7 @@ app.get('/api/status', (req, res) => {
     // Players see: id, name, goalie status, cancel permission ONLY
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
-    const publicPlayers = [...players].sort(compareRosterTeamDisplayOrder).map(p => ({
+    const publicPlayers = [...players].sort(compareWeeklyRegisteredOrder).map(p => ({
         id: p.id,
         firstName: p.firstName,
         lastName: p.lastName,
