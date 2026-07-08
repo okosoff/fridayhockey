@@ -264,8 +264,8 @@
     <li><span class="rule-number">9</span><span class="rule-text">Don't forget handshake/fist bump after the game.</span></li>
     <li>
         <span class="rule-number">10</span>
-        <span class="rule-text" style="color:#ff4444; font-weight:bold;">
-            ⚠️ Cancel anytime. Last minute cancellations must be done within 3hrs upon roster release. Allowing waitlisted players a spot. No show owes.
+        <span id="noShowPolicyRuleText" class="rule-text" style="color:#ff4444; font-weight:bold;">
+            ⚠️ Cancel anytime. Last-minute cancellations must be made 3 hours before game time to give waitlisted players a chance to play. After the 3-hour deadline, the spot is your responsibility. No-show owes.
         </span>
     </li>
 </ul>
@@ -322,6 +322,9 @@
                 if (status && status.rosterReleaseLine) rosterReleaseLine = status.rosterReleaseLine;
                 if (status && status.rosterReleaseAt) rosterReleaseAtIso = status.rosterReleaseAt;
                 if (status && status.gameDayName) gameDayName = status.gameDayName;
+                const policyText = status && (status.noShowPolicy || status.cancellationDeadlineLine);
+                const policyEl = document.getElementById('noShowPolicyRuleText');
+                if (policyText && policyEl) policyEl.textContent = `⚠️ ${policyText}`;
                 applyGameDayBranding(gameDayName, status && status.customTitle);
                 return;
             } catch (e) {

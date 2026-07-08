@@ -629,7 +629,7 @@ let currentWeekData = {
 };
 
 const MAX_GOALIES = 2;
-const NO_SHOW_POLICY_TEXT = 'Cancellations are allowed until 3 hours before game time. After that cutoff, please contact the admin.';
+const NO_SHOW_POLICY_TEXT = 'Cancel anytime. Last-minute cancellations must be made at least 3 hours before game time to give waitlisted players a chance to play. No-show owes.';
 
 const GAME_RULES = [
     "No contact. Board tie-ups only.",
@@ -642,7 +642,7 @@ const GAME_RULES = [
     "No excessive aggression. It’s pickup.",
     "Don’t be “that guy.” You know who you are.",
     "Handshake/fist bump after the game. Have fun.",
-    "Last minute cancellations must be done 3 hours before game time. This gives waitlist players a chance for a spot. No-show owes.",
+    NO_SHOW_POLICY_TEXT,
     "Respect the game and players — or you’re done."
 ];
 
@@ -5517,7 +5517,6 @@ app.get('/api/status', (req, res) => {
         rosterReleaseAtLocal: dynamicScheduleDates.rosterReleaseAt,
         resetWeekAt: dynamicScheduleDates.resetWeekAt,
         scheduleMode,
-        noShowPolicy: NO_SHOW_POLICY_TEXT,
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow,
         hoursUntilGame: cancellationTiming.hoursUntilGame
