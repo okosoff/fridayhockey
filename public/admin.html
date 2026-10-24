@@ -9016,8 +9016,8 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             const hourWord = cutoff === 1 ? 'hr' : 'hrs';
             return {
                 gameDayRoster: `You're on game day roster. Emergency cancellation closes ${cutoffText}${hourWord} before game time. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
-                gameReminder: `If you need to cancel, please do so. Not last minute. Be considerate to those on waitlist. Thx!\n${portalLink}`,
-                checkRoster: `Cancel window is closed. Roster is locked and loaded. Let's GO!\n${portalLink}`
+                gameReminder: `Hi all! If you need to cancel, please do so, and not last minute. Be considerate to those on waitlist. Thx!\n${portalLink}`,
+                checkRoster: `Hi all! Cancel window is now closed. Roster is locked in. Let's GO!\n${portalLink}`
             };
         }
 
@@ -9101,7 +9101,7 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
                 return;
             }
 
-            const smsBody = `🏒 Payment Reminder: Please ET $15. If already paid, disregard. Thanks!`;
+            const smsBody = `🏒 Payment Reminder: Hi all! Please ET$. Disregard if already paid. Thanks!`;
             window.location.href = `sms:${unpaidRegisteredPhones}?body=${encodeURIComponent(smsBody)}`;
         }
 
